@@ -37,6 +37,9 @@ importers:
       express:
         specifier: ^4.21.0
         version: 4.22.2
+      langchain:
+        specifier: ^1.4.2
+        version: 1.4.2(@langchain/core@1.1.48(openai@6.39.1(zod@3.25.76)))(openai@6.39.1(zod@3.25.76))
       uuid:
         specifier: ^10.0.0
         version: 10.0.0
