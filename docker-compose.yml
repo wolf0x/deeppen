@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    ports:
+      - "4000:4000"
+    volumes:
+      - deeppen-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DATABASE_URL=/app/data/deeppen.db
+      - CONTAINER_NAME=deeppen-tools
+      - PORT=4000
+    depends_on:
+      - ctf-tools
+    restart: unless-stopped
+
+  ctf-tools:
+    build:
+      context: ./container
+    volumes:
+      - deeppen-workspace:/workspace
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  deeppen-data:
+  deeppen-workspace:

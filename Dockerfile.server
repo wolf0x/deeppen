@@ -1,0 +1,31 @@
+FROM node:22-slim
+
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+WORKDIR /app
+
+# Copy workspace files
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/server/package.json packages/server/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source
+COPY tsconfig.json ./
+COPY packages/shared/ packages/shared/
+COPY packages/server/ packages/server/
+
+# Build shared package
+RUN pnpm --filter @deeppen/shared build
+
+# Build server
+RUN pnpm --filter @deeppen/server build
+
+# Create data directory
+RUN mkdir -p /app/data
+
+EXPOSE 4000
+
+CMD ["node", "packages/server/dist/index.js"]
