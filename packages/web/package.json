@@ -1,0 +1,9 @@
+{
+  "name": "@deeppen/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Phase 2: Web UI'",
+    "build": "echo 'Phase 2: Web UI'"
+  }
+}

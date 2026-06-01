@@ -1,0 +1,9 @@
+{
+  "name": "deeppen",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @deeppen/server dev",
+    "build": "pnpm --filter @deeppen/shared build && pnpm --filter @deeppen/server build",
+    "start": "pnpm --filter @deeppen/server start"
+  }
+}
