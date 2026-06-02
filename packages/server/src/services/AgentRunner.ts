@@ -1,4 +1,5 @@
 import { createDeepAgent } from "deepagents";
+import type { SubAgent } from "deepagents";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
@@ -6,6 +7,7 @@ import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createFlagExtractorMiddleware } from "../middleware/ctfFlagExtractor.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
+import { createToolTrackerMiddleware } from "../middleware/ctfToolTracker.js";
 import { DockerBackend } from "../backends/docker.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
 import type { ContainerManager } from "./ContainerManager.js";
@@ -79,6 +81,8 @@ export interface RunAgentOptions {
   challenge: string;
   category: string;
   skills?: string[];
+  attachments?: string[];
+  subagents?: SubAgent[];
   containerManager?: ContainerManager;
   rabbitHole?: {
     maxIterations: number;
@@ -110,6 +114,7 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     challenge,
     category,
     skills,
+    attachments,
     containerManager,
     rabbitHole,
     onStreamEvent,
@@ -129,18 +134,51 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   // Create tools array
   const tools = [createWebFetchTool()];
 
+  // If no skills specified, load skills matching the category
+  const effectiveSkills = skills && skills.length > 0 ? skills : [`/skills/${category}/`];
+
   const agent = createDeepAgent({
     model,
-    systemPrompt: `You are a CTF (Capture The Flag) challenge solver specializing in ${category} challenges. Your goal is to find the flag. Analyze the challenge, use available tools to investigate, and extract the flag.
+    systemPrompt: `You are DeepPen, an autonomous CTF challenge solver. Your workflow:
+
+## Phase 1: Analyze
+When you receive a challenge, FIRST analyze it to determine:
+- What type of challenge is this? (web, pwn, crypto, forensics, misc, prompt-injection)
+- What attack vectors are likely?
+- What tools will you need?
+- What is your strategy?
+
+## Phase 2: Execute
+- Read the skill instructions for this challenge type if available
+- Execute your strategy step by step
+- Use the container tools (nmap, sqlmap, curl, gdb, etc.) via the execute tool
+- Use web_fetch to retrieve web content
+- Use filesystem tools to read/write files
+
+## Phase 3: Extract Flag
+- When you find the flag, output it clearly in format: flag{...} or CTF{...} or HTB{...}
+
+## Available Tools
+- execute: Run any shell command in the Kali container. Use for nmap, sqlmap, curl, gdb, python scripts, etc.
+- web_fetch: Fetch a URL and return its content
+- read_file, write_file, edit_file: File operations in the container workspace
+- ls, glob, grep: Search and list files
+
+Challenge Category: ${category}
 
 Challenge:
 ${challenge}
 
-When you find the flag, output it clearly in the format: flag{...} or the appropriate format for the challenge.`,
-    skills: skills ?? [],
+${attachments?.length ? `\nAttached files have been downloaded to /workspace/attachments/\nFiles: ${attachments.join(", ")}` : ""}
+
+Available skills for this challenge type have been loaded. Read their instructions before starting.
+`,
+    skills: effectiveSkills,
     backend,
     tools,
+    subagents: options.subagents ?? [],
     middleware: [
+      createToolTrackerMiddleware({ onStreamEvent, onFlagFound }),
       createProgressTrackerMiddleware({
         taskId: "live",
         onProgress: (entry) => {

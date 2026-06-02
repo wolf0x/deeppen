@@ -195,18 +195,53 @@ export class TaskManager extends EventEmitter {
     signal: AbortSignal,
   ): Promise<void> {
     try {
+      // Ensure container is running
+      if (this.containerManager) {
+        const status = await this.containerManager.getStatus();
+        if (!status.running) {
+          this.emitStreamEvent(taskId, {
+            id: `container-${Date.now()}`,
+            parentId: null,
+            type: "agent-think",
+            timestamp: Date.now(),
+            data: { content: "Starting CTF tools container..." },
+            status: "complete",
+            depth: 1,
+          });
+          await this.containerManager.start();
+        }
+      }
+
       const rabbitHole = task.rabbitHoleConfigJson
         ? JSON.parse(task.rabbitHoleConfigJson)
         : undefined;
       const skills = task.skillsJson
         ? JSON.parse(task.skillsJson)
         : undefined;
+      const attachments = task.attachmentsJson
+        ? JSON.parse(task.attachmentsJson)
+        : undefined;
+
+      // Download attachments to container workspace if they exist
+      if (attachments && attachments.length > 0 && this.containerManager) {
+        for (const url of attachments) {
+          try {
+            const filename = url.split("/").pop() ?? "attachment";
+            await this.containerManager.execute(
+              `curl -sL "${url}" -o /workspace/attachments/${filename}`,
+            );
+          } catch {
+            // Log but continue
+          }
+        }
+      }
 
       const result = await runCTFAgent({
         modelConfig,
         challenge: task.challengeDescription,
         category: task.category,
         skills,
+        attachments,
         containerManager: this.containerManager,
         rabbitHole,
         abortSignal: signal,
@@ -280,10 +315,39 @@ export class TaskManager extends EventEmitter {
     taskId: string,
     flag: string,
   ): Promise<void> {
+    // Update task with flag
     await db
       .update(tasks)
       .set({ flag, updatedAt: new Date() })
       .where(eq(tasks.id, taskId));
+
+    // Auto-submit if configured
+    const task = await this.getTask(taskId);
+    if (task?.autoSubmit && task?.connectorId) {
+      try {
+        // TODO: resolve connector and submit flag
+        // For now, emit the event
+        this.emitStreamEvent(taskId, {
+          id: `submit-${Date.now()}`,
+          parentId: null,
+          type: "flag-submitted",
+          timestamp: Date.now(),
+          data: { flag },
+          status: "complete",
+          depth: 0,
+        });
+      } catch (err: any) {
+        this.emitStreamEvent(taskId, {
+          id: `submit-err-${Date.now()}`,
+          parentId: null,
+          type: "flag-rejected",
+          timestamp: Date.now(),
+          data: { flag, error: err.message },
+          status: "error",
+          depth: 0,
+        });
+      }
+    }
   }
 
   private emitStreamEvent(taskId: string, event: StreamEvent): void {
