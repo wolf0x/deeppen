@@ -130,7 +130,7 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
       {/* Expanded content */}
       {expanded && !hasChildren && fullContent && (
         <div className="ml-10 my-1">
-          <pre className={`text-xs p-2 rounded border border-border overflow-auto max-h-96 whitespace-pre-wrap break-words ${
+          <pre className={`text-xs p-2 rounded border border-border overflow-auto max-h-[600px] whitespace-pre-wrap break-words ${
             event.type === "tool-result" ? "bg-bg-elevated text-text-secondary font-mono" :
             event.type === "tool-call" ? "bg-bg-elevated text-text-secondary font-mono" :
             "text-text-secondary"

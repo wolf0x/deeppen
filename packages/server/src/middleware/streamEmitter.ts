@@ -39,7 +39,7 @@ export function createStreamEmitterMiddleware(options: StreamEmitterOptions): an
           parentId: null,
           type: "agent-response",
           timestamp: Date.now(),
-          data: { content: text.slice(0, 2000) },
+          data: { content: text },
           status: "complete",
           depth: 1,
         });
@@ -85,7 +85,7 @@ export function createStreamEmitterMiddleware(options: StreamEmitterOptions): an
           parentId: callId,
           type: "tool-result",
           timestamp: Date.now(),
-          data: { toolName: toolCall.name, toolOutput: output.slice(0, 1000) },
+          data: { toolName: toolCall.name, toolOutput: output },
           status: "complete",
           depth: 3,
         });
