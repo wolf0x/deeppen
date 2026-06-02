@@ -8,6 +8,7 @@ import { SubAgentConfig } from "./pages/SubAgentConfig.js";
 import { MCPConfig } from "./pages/MCPConfig.js";
 import { SkillsManager } from "./pages/SkillsManager.js";
 import { ContainerConfig } from "./pages/ContainerConfig.js";
+import { ConnectorConfig } from "./pages/ConnectorConfig.js";
 import { Writeups } from "./pages/Writeups.js";
 
 export function App() {
@@ -24,6 +25,7 @@ export function App() {
           <Route path="/config/mcp" element={<MCPConfig />} />
           <Route path="/config/skills" element={<SkillsManager />} />
           <Route path="/config/container" element={<ContainerConfig />} />
+          <Route path="/config/connectors" element={<ConnectorConfig />} />
         </Route>
       </Routes>
     </BrowserRouter>

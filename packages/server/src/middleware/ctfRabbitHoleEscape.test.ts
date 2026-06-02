@@ -1,5 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { createRabbitHoleEscapeMiddleware } from "./ctfRabbitHoleEscape.js";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("deepagents", () => ({
+  createMiddleware: (opts: any) => ({ ...opts }),
+}));
+
+vi.mock("@langchain/core/messages", () => ({
+  SystemMessage: class SystemMessage {
+    constructor(public opts: any) {}
+  },
+}));
+
+const { createRabbitHoleEscapeMiddleware } = await import("./ctfRabbitHoleEscape.js");
 
 describe("createRabbitHoleEscapeMiddleware", () => {
   it("creates middleware with correct name", () => {

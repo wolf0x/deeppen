@@ -1,4 +1,4 @@
-import { createMiddleware } from "langchain";
+import { createMiddleware } from "deepagents";
 import { FLAG_PATTERNS } from "@deeppen/shared";
 
 /**

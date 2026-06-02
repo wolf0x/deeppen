@@ -1,4 +1,5 @@
-import { createMiddleware, SystemMessage } from "langchain";
+import { createMiddleware } from "deepagents";
+import { SystemMessage } from "@langchain/core/messages";
 
 export interface RabbitHoleEscapeOptions {
   /** Maximum number of model calls before forcing a pivot */

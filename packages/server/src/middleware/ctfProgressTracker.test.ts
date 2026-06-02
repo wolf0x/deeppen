@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { createProgressTrackerMiddleware } from "./ctfProgressTracker.js";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("deepagents", () => ({
+  createMiddleware: (opts: any) => ({ ...opts }),
+}));
+
+const { createProgressTrackerMiddleware } = await import("./ctfProgressTracker.js");
 
 describe("createProgressTrackerMiddleware", () => {
   it("creates middleware with correct name", () => {

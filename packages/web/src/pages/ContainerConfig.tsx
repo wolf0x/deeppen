@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { api } from "../lib/api.js";
 
 export function ContainerConfig() {
   const [status, setStatus] = useState<any>(null);
@@ -9,22 +10,22 @@ export function ContainerConfig() {
     setLoading(true);
     try {
       const [statusRes, configRes] = await Promise.all([
-        fetch("/api/config/container/status"),
-        fetch("/api/config/container/config"),
+        api.getContainerStatus(),
+        api.getContainerConfig(),
       ]);
-      setStatus(await statusRes.json());
-      setConfig(await configRes.json());
+      setStatus(statusRes);
+      setConfig(configRes);
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
 
   const handleStart = async () => {
-    await fetch("/api/config/container/start", { method: "POST" });
+    await api.startContainer();
     refresh();
   };
 
   const handleStop = async () => {
-    await fetch("/api/config/container/stop", { method: "POST" });
+    await api.stopContainer();
     refresh();
   };
 

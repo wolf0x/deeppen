@@ -1,4 +1,4 @@
-import { createMiddleware } from "langchain";
+import { createMiddleware } from "deepagents";
 import { v4 as uuid } from "uuid";
 import type { ProgressEntry } from "@deeppen/shared";
 

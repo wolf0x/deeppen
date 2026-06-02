@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { api } from "../lib/api.js";
 
 export function SkillsManager() {
   const [skills, setSkills] = useState<any[]>([]);
@@ -7,20 +8,19 @@ export function SkillsManager() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/config/skills");
-      setSkills(await res.json());
+      setSkills(await api.listSkills());
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
 
   const handleToggle = async (id: string) => {
-    await fetch(`/api/config/skills/${id}/toggle`, { method: "POST" });
+    await api.toggleSkill(id);
     refresh();
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this skill?")) return;
-    await fetch(`/api/config/skills/${id}`, { method: "DELETE" });
+    await api.deleteSkill(id);
     refresh();
   };
 

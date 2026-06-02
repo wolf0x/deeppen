@@ -3,6 +3,7 @@ import { useTask } from "../hooks/useTasks.js";
 import { useSSE } from "../hooks/useSSE.js";
 import { StreamTree } from "../components/task/StreamTree.js";
 import { TaskControls } from "../components/task/TaskControls.js";
+import { api } from "../lib/api.js";
 
 export function TaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -11,10 +12,8 @@ export function TaskDetail() {
 
   const handleGenerateWriteup = async () => {
     try {
-      const res = await fetch(`/api/writeups/generate/${id}`, { method: "POST" });
-      if (res.ok) {
-        window.location.href = "/writeups";
-      }
+      await api.generateWriteup(id!);
+      window.location.href = "/writeups";
     } catch (err: any) {
       alert(err.message);
     }

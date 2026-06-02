@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { api } from "../lib/api.js";
 
 export function Writeups() {
   const [writeups, setWriteups] = useState<any[]>([]);
@@ -8,15 +9,13 @@ export function Writeups() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/writeups");
-      setWriteups(await res.json());
+      setWriteups(await api.listWriteups());
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
 
   const handleView = async (id: string) => {
-    const res = await fetch(`/api/writeups/${id}`);
-    setSelected(await res.json());
+    setSelected(await api.getWriteup(id));
   };
 
   const handleExport = (id: string, title: string) => {
@@ -28,7 +27,7 @@ export function Writeups() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this writeup?")) return;
-    await fetch(`/api/writeups/${id}`, { method: "DELETE" });
+    await api.deleteWriteup(id);
     if (selected?.id === id) setSelected(null);
     refresh();
   };

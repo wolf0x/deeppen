@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { extractFlags, createFlagExtractorMiddleware } from "./ctfFlagExtractor.js";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("deepagents", () => ({
+  createMiddleware: (opts: any) => ({ ...opts }),
+}));
+
+const { extractFlags, createFlagExtractorMiddleware } = await import("./ctfFlagExtractor.js");
 
 describe("extractFlags", () => {
   it("extracts flag{...} pattern", () => {

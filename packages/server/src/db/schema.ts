@@ -65,16 +65,6 @@ export const streamEvents = sqliteTable("stream_events", {
   depth: integer("depth").notNull(),
 });
 
-export const progressEntries = sqliteTable("progress_entries", {
-  id: text("id").primaryKey(),
-  taskId: text("task_id").notNull().references(() => tasks.id),
-  timestamp: integer("timestamp", { mode: "timestamp" }).notNull(),
-  approach: text("approach").notNull(),
-  toolsUsedJson: text("tools_used_json"),
-  result: text("result").notNull(),
-  notes: text("notes"),
-});
-
 export const writeups = sqliteTable("writeups", {
   id: text("id").primaryKey(),
   taskId: text("task_id").notNull().references(() => tasks.id),

@@ -1,5 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { createChatModel } from "./AgentRunner.js";
+import { describe, it, expect, vi } from "vitest";
+
+vi.mock("deepagents", () => ({
+  createDeepAgent: vi.fn(),
+}));
+
+vi.mock("@langchain/core/messages", () => ({
+  SystemMessage: class SystemMessage {
+    constructor(public opts: any) {}
+  },
+}));
+
+const { createChatModel } = await import("./AgentRunner.js");
 
 describe("createChatModel", () => {
   it("creates Anthropic model", () => {

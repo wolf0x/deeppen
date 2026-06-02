@@ -9,6 +9,7 @@ const nav = [
   { path: "/config/mcp", label: "MCP", icon: "🔌" },
   { path: "/config/skills", label: "Skills", icon: "🧩" },
   { path: "/config/container", label: "Container", icon: "🐳" },
+  { path: "/config/connectors", label: "Connectors", icon: "🔗" },
 ];
 
 export function Sidebar() {

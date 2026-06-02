@@ -29,4 +29,32 @@ export const api = {
   listSubagents: () => request<any[]>("/config/agents"),
   createSubagent: (config: any) => request<any>("/config/agents", { method: "POST", body: JSON.stringify(config) }),
   deleteSubagent: (id: string) => request<{ ok: boolean }>(`/config/agents/${id}`, { method: "DELETE" }),
+
+  // MCP
+  listMCPs: () => request<any[]>("/config/mcp"),
+  createMCP: (config: any) => request<any>("/config/mcp", { method: "POST", body: JSON.stringify(config) }),
+  updateMCP: (id: string, config: any) => request<any>(`/config/mcp/${id}`, { method: "PUT", body: JSON.stringify(config) }),
+  deleteMCP: (id: string) => request<{ ok: boolean }>(`/config/mcp/${id}`, { method: "DELETE" }),
+  testMCP: (id: string) => request<{ ok: boolean; error?: string }>(`/config/mcp/${id}/test`, { method: "POST" }),
+
+  // Skills
+  listSkills: () => request<any[]>("/config/skills"),
+  createSkill: (config: any) => request<any>("/config/skills", { method: "POST", body: JSON.stringify(config) }),
+  toggleSkill: (id: string) => request<{ ok: boolean; enabled: boolean }>(`/config/skills/${id}/toggle`, { method: "POST" }),
+  deleteSkill: (id: string) => request<{ ok: boolean }>(`/config/skills/${id}`, { method: "DELETE" }),
+
+  // Container
+  getContainerConfig: () => request<any>("/config/container/config"),
+  updateContainerConfig: (config: any) => request<any>("/config/container/config", { method: "PUT", body: JSON.stringify(config) }),
+  getContainerStatus: () => request<any>("/config/container/status"),
+  startContainer: () => request<{ ok: boolean }>("/config/container/start", { method: "POST" }),
+  stopContainer: () => request<{ ok: boolean }>("/config/container/stop", { method: "POST" }),
+  executeInContainer: (command: string, options?: any) => request<any>("/config/container/execute", { method: "POST", body: JSON.stringify({ command, options }) }),
+
+  // Writeups
+  listWriteups: () => request<any[]>("/writeups"),
+  getWriteup: (id: string) => request<any>(`/writeups/${id}`),
+  generateWriteup: (taskId: string) => request<any>(`/writeups/generate/${taskId}`, { method: "POST" }),
+  updateWriteup: (id: string, content: string) => request<any>(`/writeups/${id}`, { method: "PUT", body: JSON.stringify({ contentMarkdown: content }) }),
+  deleteWriteup: (id: string) => request<{ ok: boolean }>(`/writeups/${id}`, { method: "DELETE" }),
 };

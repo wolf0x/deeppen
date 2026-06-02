@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
-import { tasks, streamEvents, progressEntries } from "../db/index.js";
+import { tasks, streamEvents } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import type { TaskConfig, TaskStatus, StreamEvent } from "@deeppen/shared";
 import { runCTFAgent } from "./AgentRunner.js";
