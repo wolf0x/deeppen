@@ -9,6 +9,17 @@ export function TaskDetail() {
   const { task, loading, refresh } = useTask(id!);
   useSSE(id);
 
+  const handleGenerateWriteup = async () => {
+    try {
+      const res = await fetch(`/api/writeups/generate/${id}`, { method: "POST" });
+      if (res.ok) {
+        window.location.href = "/writeups";
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   if (loading) return <div className="p-6 text-text-secondary">Loading...</div>;
   if (!task) return <div className="p-6 text-accent-red">Task not found</div>;
 
@@ -35,7 +46,15 @@ export function TaskDetail() {
           </div>
           <p className="text-sm text-text-secondary mt-1">{task.challengeDescription}</p>
         </div>
-        <TaskControls task={task} onRefresh={refresh} />
+        <div className="flex items-center gap-2">
+          <TaskControls task={task} onRefresh={refresh} />
+          {task.status === "completed" && (
+            <button onClick={handleGenerateWriteup}
+              className="px-3 py-1.5 bg-accent-purple text-bg-primary rounded text-sm font-medium">
+              📄 Generate Writeup
+            </button>
+          )}
+        </div>
       </div>
 
       {task.flag && (

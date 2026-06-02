@@ -8,6 +8,7 @@ import { SubAgentConfig } from "./pages/SubAgentConfig.js";
 import { MCPConfig } from "./pages/MCPConfig.js";
 import { SkillsManager } from "./pages/SkillsManager.js";
 import { ContainerConfig } from "./pages/ContainerConfig.js";
+import { Writeups } from "./pages/Writeups.js";
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/tasks/new" element={<TaskCreate />} />
           <Route path="/tasks/:id" element={<TaskDetail />} />
+          <Route path="/writeups" element={<Writeups />} />
           <Route path="/config/models" element={<ModelConfig />} />
           <Route path="/config/agents" element={<SubAgentConfig />} />
           <Route path="/config/mcp" element={<MCPConfig />} />

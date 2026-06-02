@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 const nav = [
   { path: "/", label: "Tasks", icon: "📋" },
   { path: "/tasks/new", label: "New Task", icon: "➕" },
+  { path: "/writeups", label: "Writeups", icon: "📄" },
   { path: "/config/models", label: "Models", icon: "🤖" },
   { path: "/config/agents", label: "Sub-Agents", icon: "👥" },
   { path: "/config/mcp", label: "MCP", icon: "🔌" },

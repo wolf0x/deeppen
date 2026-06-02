@@ -5,6 +5,13 @@ import { TaskCard } from "../components/task/TaskCard.js";
 export function Dashboard() {
   const { tasks, loading, refresh } = useTasks();
 
+  const stats = {
+    total: tasks.length,
+    running: tasks.filter((t: any) => t.status === "running").length,
+    completed: tasks.filter((t: any) => t.status === "completed").length,
+    failed: tasks.filter((t: any) => t.status === "failed").length,
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -27,6 +34,25 @@ export function Dashboard() {
           >
             + New Task
           </Link>
+        </div>
+      </div>
+
+      <div className="flex gap-4 mb-6">
+        <div className="px-4 py-2 bg-bg-surface border border-border rounded-lg">
+          <span className="text-text-secondary text-sm">Total</span>
+          <p className="text-xl font-bold">{stats.total}</p>
+        </div>
+        <div className="px-4 py-2 bg-bg-surface border border-border rounded-lg">
+          <span className="text-text-secondary text-sm">Running</span>
+          <p className="text-xl font-bold text-accent-green">{stats.running}</p>
+        </div>
+        <div className="px-4 py-2 bg-bg-surface border border-border rounded-lg">
+          <span className="text-text-secondary text-sm">Completed</span>
+          <p className="text-xl font-bold text-accent-blue">{stats.completed}</p>
+        </div>
+        <div className="px-4 py-2 bg-bg-surface border border-border rounded-lg">
+          <span className="text-text-secondary text-sm">Failed</span>
+          <p className="text-xl font-bold text-accent-red">{stats.failed}</p>
         </div>
       </div>
 
