@@ -142,13 +142,26 @@ export class ConfigStore {
     await db.delete(subagentConfigs).where(eq(subagentConfigs.id, id));
   }
 
+  // ─── Internal: Get model with real API key (for agent execution) ──
+  async getModelWithKey(id: string): Promise<ModelConfig | null> {
+    const rows = await db
+      .select()
+      .from(modelConfigs)
+      .where(eq(modelConfigs.id, id));
+    if (!rows[0]) return null;
+    return {
+      ...this.rowToModelConfig(rows[0]),
+      apiKey: rows[0].apiKeyEncrypted ?? undefined,
+    };
+  }
+
   // ─── Mappers ───────────────────────────────────────
   private rowToModelConfig(row: any): ModelConfig {
     return {
       id: row.id,
       name: row.name,
       provider: row.provider as ModelConfig["provider"],
-      apiKey: row.apiKeyEncrypted ?? undefined,
+      apiKey: row.apiKeyEncrypted ? "***" : undefined, // Masked for security
       baseUrl: row.baseUrl ?? undefined,
       modelId: row.modelId,
       maxTokens: row.maxTokens ?? 4096,

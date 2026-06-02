@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { WriteupGenerator } from "../services/WriteupGenerator.js";
 
+// Sanitize filename for Content-Disposition header
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+}
+
 export function createWriteupRoutes(generator: WriteupGenerator): Router {
   const router = Router();
 
@@ -20,8 +25,9 @@ export function createWriteupRoutes(generator: WriteupGenerator): Router {
   router.get("/:id/export", async (req, res) => {
     const w = await generator.get(req.params.id);
     if (!w) return res.status(404).json({ error: "Not found" });
-    res.setHeader("Content-Type", "text/markdown");
-    res.setHeader("Content-Disposition", `attachment; filename="${w.title}.md"`);
+    const safeName = sanitizeFilename(w.title);
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}.md"`);
     res.send(w.contentMarkdown);
   });
 

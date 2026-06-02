@@ -40,8 +40,9 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
     }
   }, [event.type]);
 
-  const content = event.data.content ?? event.data.flag ?? event.data.error ?? "";
-  const toolInfo = event.type === "tool-call" ? `: ${event.data.toolName}` : event.type === "tool-result" ? ` (${event.data.toolName})` : "";
+  const data = event.data ?? {};
+  const content = data.content ?? data.flag ?? data.error ?? "";
+  const toolInfo = event.type === "tool-call" ? `: ${data.toolName}` : event.type === "tool-result" ? ` (${data.toolName})` : "";
 
   return (
     <div>
@@ -65,8 +66,8 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
             {typeof content === "string" ? content.slice(0, 120) : JSON.stringify(content).slice(0, 120)}
           </span>
         )}
-        {event.type === "flag-found" && event.data.flag && (
-          <span className="bg-accent-green/20 text-accent-green px-2 py-0.5 rounded text-xs font-bold">{event.data.flag}</span>
+        {event.type === "flag-found" && data.flag && (
+          <span className="bg-accent-green/20 text-accent-green px-2 py-0.5 rounded text-xs font-bold">{data.flag}</span>
         )}
       </div>
       {expanded && hasChildren && <div className="border-l border-border ml-4">{children}</div>}

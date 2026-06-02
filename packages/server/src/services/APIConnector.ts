@@ -3,6 +3,31 @@ import { apiConnectorConfigs } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 
+function isAllowedUrl(urlStr: string): boolean {
+  try {
+    const url = new URL(urlStr);
+    // Block internal/private IPs
+    const hostname = url.hostname;
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1" ||
+      hostname.startsWith("169.254.") ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("172.16.") ||
+      hostname.startsWith("192.168.") ||
+      hostname.endsWith(".internal") ||
+      hostname.endsWith(".local")
+    ) {
+      return false;
+    }
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export interface APIConnectorConfig {
   id: string;
   name: string;
@@ -26,6 +51,9 @@ export class APIConnector {
   }
 
   async create(config: Omit<APIConnectorConfig, "id">): Promise<APIConnectorConfig> {
+    if (!isAllowedUrl(config.baseUrl)) {
+      throw new Error("URL not allowed: must be a public HTTP/HTTPS URL");
+    }
     const id = uuid();
     const now = new Date();
     await db.insert(apiConnectorConfigs).values({
@@ -46,6 +74,9 @@ export class APIConnector {
     try {
       const config = await this.get(id);
       if (!config) return { ok: false, error: "Not found" };
+      if (!isAllowedUrl(config.baseUrl)) {
+        return { ok: false, error: "URL not allowed: must be a public HTTP/HTTPS URL" };
+      }
       // Try to reach the base URL
       const response = await fetch(config.baseUrl, { method: "HEAD", signal: AbortSignal.timeout(5000) });
       await db.update(apiConnectorConfigs).set({ testStatus: "ok", lastTestedAt: new Date(), updatedAt: new Date() }).where(eq(apiConnectorConfigs.id, id));

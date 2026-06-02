@@ -31,20 +31,18 @@ export function createRabbitHoleEscapeMiddleware(options: RabbitHoleEscapeOption
       iterationCount++;
       const elapsedMinutes = (Date.now() - startTime) / 60_000;
 
-      // Check time limit
+      // Check time limit — always force stop regardless of strategy
       if (elapsedMinutes >= maxTimeMinutes) {
         onEscape?.(`Time limit exceeded (${maxTimeMinutes}min)`, iterationCount);
 
-        if (pivotStrategy === "stop") {
-          return handler({
-            ...request,
-            systemMessage: request.systemMessage.concat(
-              new SystemMessage({
-                content: `TIME LIMIT REACHED: You have been working for ${Math.round(elapsedMinutes)} minutes. Stop all work immediately and summarize what you've found so far. Return your final findings.`
-              })
-            ),
-          });
-        }
+        return handler({
+          ...request,
+          systemMessage: request.systemMessage.concat(
+            new SystemMessage({
+              content: `TIME LIMIT REACHED: You have been working for ${Math.round(elapsedMinutes)} minutes. Stop all work immediately and summarize what you've found so far. Return your final findings.`
+            })
+          ),
+        });
       }
 
       // Check iteration limit

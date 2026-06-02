@@ -3,6 +3,31 @@ import { mcpConfigs } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 
+function isAllowedUrl(urlStr: string): boolean {
+  try {
+    const url = new URL(urlStr);
+    // Block internal/private IPs
+    const hostname = url.hostname;
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1" ||
+      hostname.startsWith("169.254.") ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("172.16.") ||
+      hostname.startsWith("192.168.") ||
+      hostname.endsWith(".internal") ||
+      hostname.endsWith(".local")
+    ) {
+      return false;
+    }
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export interface MCPConfig {
   id: string;
   name: string;
@@ -64,6 +89,10 @@ export class MCPManager {
       // Basic validation
       if (config.transport === "stdio" && !config.command) return { ok: false, error: "No command specified" };
       if (config.transport === "sse" && !config.url) return { ok: false, error: "No URL specified" };
+      // SSRF protection for SSE transport
+      if (config.transport === "sse" && config.url && !isAllowedUrl(config.url)) {
+        return { ok: false, error: "URL not allowed: must be a public HTTP/HTTPS URL" };
+      }
       await db.update(mcpConfigs).set({ testStatus: "ok", lastTestedAt: new Date(), updatedAt: new Date() }).where(eq(mcpConfigs.id, id));
       return { ok: true };
     } catch (err: any) {

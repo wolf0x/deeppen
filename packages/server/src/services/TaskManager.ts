@@ -54,8 +54,12 @@ export class TaskManager extends EventEmitter {
     if (!task) throw new Error(`Task ${taskId} not found`);
     if (task.status === "running")
       throw new Error(`Task ${taskId} is already running`);
+    // Only allow starting from created or paused state
+    if (task.status !== "created" && task.status !== "paused") {
+      throw new Error(`Task ${taskId} cannot be started from status '${task.status}'`);
+    }
 
-    const modelConfig = await this.configStore.getModel(
+    const modelConfig = await this.configStore.getModelWithKey(
       task.modelConfigId!,
     );
     if (!modelConfig)
@@ -237,6 +241,8 @@ export class TaskManager extends EventEmitter {
     } catch (err: any) {
       if (signal.aborted) return;
       this.handleTaskError(taskId, err);
+    } finally {
+      this.abortControllers.delete(taskId);
     }
   }
 

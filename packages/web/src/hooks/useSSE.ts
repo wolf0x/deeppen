@@ -12,10 +12,25 @@ export function useSSE(taskId: string | undefined) {
     clear();
     const source = new EventSource(`/api/tasks/${taskId}/stream`);
     sourceRef.current = source;
+
     source.addEventListener("stream", (e) => {
       try { addEvent(JSON.parse(e.data)); } catch {}
     });
-    source.addEventListener("connected", () => console.log("SSE connected"));
-    return () => { source.close(); };
+
+    source.addEventListener("connected", () => {
+      console.log("SSE connected for task", taskId);
+    });
+
+    source.onerror = () => {
+      // Will auto-reconnect, but clean up if closed
+      if (source.readyState === EventSource.CLOSED) {
+        sourceRef.current = null;
+      }
+    };
+
+    return () => {
+      source.close();
+      sourceRef.current = null;
+    };
   }, [taskId, addEvent, clear]);
 }

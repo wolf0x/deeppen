@@ -16,10 +16,19 @@ export function createStreamRoutes(
     // Register SSE client
     streamBridge.addClient(taskId, res);
 
-    // Replay existing events
-    const events = await taskManager.getStreamEvents(taskId);
-    for (const event of events) {
-      res.write(`event: stream\ndata: ${JSON.stringify(event)}\n\n`);
+    // Replay existing events with error handling
+    try {
+      const events = await taskManager.getStreamEvents(taskId);
+      for (const event of events) {
+        if (res.writableEnded) break;
+        try {
+          res.write(`event: stream\ndata: ${JSON.stringify(event)}\n\n`);
+        } catch {
+          break; // Client disconnected
+        }
+      }
+    } catch {
+      // Ignore replay errors
     }
   });
 

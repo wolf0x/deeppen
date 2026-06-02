@@ -33,7 +33,7 @@ export function createConfigRoutes(configStore: ConfigStore): Router {
 
   router.post("/models/:id/test", async (req, res) => {
     try {
-      const model = await configStore.getModel(req.params.id);
+      const model = await configStore.getModelWithKey(req.params.id);
       if (!model) return res.status(404).json({ error: "Not found" });
 
       const chatModel = createChatModel(model);
