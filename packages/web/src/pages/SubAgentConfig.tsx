@@ -15,11 +15,18 @@ export function SubAgentConfig() {
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createSubagent({ name, description, systemPrompt });
-    setShowForm(false); setName(""); setDescription(""); setSystemPrompt("");
-    refresh();
+    setError(null);
+    try {
+      await api.createSubagent({ name, description, systemPrompt });
+      setShowForm(false); setName(""); setDescription(""); setSystemPrompt("");
+      refresh();
+    } catch (err: any) {
+      setError(err.message || "Failed to create sub-agent");
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -45,6 +52,11 @@ export function SubAgentConfig() {
             className="w-full px-3 py-2 bg-bg-elevated border border-border rounded text-text-primary focus:border-accent-blue focus:outline-none" required />
           <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="System prompt..." rows={4}
             className="w-full px-3 py-2 bg-bg-elevated border border-border rounded text-text-primary focus:border-accent-blue focus:outline-none font-mono text-sm" required />
+          {error && (
+            <div className="px-3 py-2 bg-accent-red/10 border border-accent-red/30 rounded text-accent-red text-sm">
+              {error}
+            </div>
+          )}
           <button type="submit" className="px-4 py-2 bg-accent-blue text-bg-primary rounded font-medium">Save</button>
         </form>
       )}

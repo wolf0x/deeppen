@@ -27,12 +27,19 @@ export function ModelConfig() {
   const [baseUrl, setBaseUrl] = useState("");
   const [modelId, setModelId] = useState("");
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createModel({ name, provider, apiKey, baseUrl, modelId });
-    setShowForm(false);
-    setName(""); setApiKey(""); setBaseUrl(""); setModelId("");
-    refresh();
+    setError(null);
+    try {
+      await api.createModel({ name, provider, apiKey, baseUrl, modelId });
+      setShowForm(false);
+      setName(""); setApiKey(""); setBaseUrl(""); setModelId("");
+      refresh();
+    } catch (err: any) {
+      setError(err.message || "Failed to create model");
+    }
   };
 
   const handleTest = async (id: string) => {
@@ -81,6 +88,11 @@ export function ModelConfig() {
             placeholder="Model ID (e.g., claude-sonnet-4-6)"
             className="w-full px-3 py-2 bg-bg-elevated border border-border rounded text-text-primary focus:border-accent-blue focus:outline-none"
             required />
+          {error && (
+            <div className="px-3 py-2 bg-accent-red/10 border border-accent-red/30 rounded text-accent-red text-sm">
+              {error}
+            </div>
+          )}
           <button type="submit" className="px-4 py-2 bg-accent-blue text-bg-primary rounded font-medium">Save</button>
         </form>
       )}

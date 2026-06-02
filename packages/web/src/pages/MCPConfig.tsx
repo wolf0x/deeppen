@@ -20,11 +20,18 @@ export function MCPConfig() {
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createMCP({ name, transport, command: transport === "stdio" ? command : undefined, url: transport === "sse" ? url : undefined });
-    setShowForm(false); setName(""); setCommand(""); setUrl("");
-    refresh();
+    setError(null);
+    try {
+      await api.createMCP({ name, transport, command: transport === "stdio" ? command : undefined, url: transport === "sse" ? url : undefined });
+      setShowForm(false); setName(""); setCommand(""); setUrl("");
+      refresh();
+    } catch (err: any) {
+      setError(err.message || "Failed to create MCP server");
+    }
   };
 
   const handleTest = async (id: string) => {
@@ -65,6 +72,11 @@ export function MCPConfig() {
           ) : (
             <input type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="URL (e.g., http://localhost:8080/sse)"
               className="w-full px-3 py-2 bg-bg-elevated border border-border rounded text-text-primary focus:border-accent-blue focus:outline-none" required />
+          )}
+          {error && (
+            <div className="px-3 py-2 bg-accent-red/10 border border-accent-red/30 rounded text-accent-red text-sm">
+              {error}
+            </div>
           )}
           <button type="submit" className="px-4 py-2 bg-accent-blue text-bg-primary rounded font-medium">Save</button>
         </form>
