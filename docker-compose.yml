@@ -29,6 +29,8 @@ services:
   ctf-tools:
     build:
       context: ./container
+      dockerfile: Dockerfile
+    container_name: deeppen-tools
     volumes:
       - deeppen-workspace:/workspace
     stdin_open: true

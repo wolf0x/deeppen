@@ -6,10 +6,12 @@ import { eq } from "drizzle-orm";
 import type { TaskConfig, TaskStatus, StreamEvent } from "@deeppen/shared";
 import { runCTFAgent } from "./AgentRunner.js";
 import { ConfigStore } from "./ConfigStore.js";
+import { ContainerManager } from "./ContainerManager.js";
 
 export class TaskManager extends EventEmitter {
   private abortControllers = new Map<string, AbortController>();
   private configStore = new ConfigStore();
+  private containerManager = new ContainerManager();
 
   /**
    * Create a new task from config.
@@ -205,6 +207,7 @@ export class TaskManager extends EventEmitter {
         challenge: task.challengeDescription,
         category: task.category,
         skills,
+        containerManager: this.containerManager,
         rabbitHole,
         abortSignal: signal,
         onStreamEvent: (event) => this.emitStreamEvent(taskId, event),

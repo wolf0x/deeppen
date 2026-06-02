@@ -6,6 +6,9 @@ import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createFlagExtractorMiddleware } from "../middleware/ctfFlagExtractor.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
+import { DockerBackend } from "../backends/docker.js";
+import { createWebFetchTool } from "../tools/web_fetch.js";
+import type { ContainerManager } from "./ContainerManager.js";
 
 /**
  * Create a LangChain chat model from a ModelConfig.
@@ -76,6 +79,7 @@ export interface RunAgentOptions {
   challenge: string;
   category: string;
   skills?: string[];
+  containerManager?: ContainerManager;
   rabbitHole?: {
     maxIterations: number;
     maxTimeMinutes: number;
@@ -106,6 +110,7 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     challenge,
     category,
     skills,
+    containerManager,
     rabbitHole,
     onStreamEvent,
     onFlagFound,
@@ -116,6 +121,14 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   let foundFlag: string | null = null;
   const events: StreamEvent[] = [];
 
+  // Create Docker backend if container manager is provided
+  const backend = containerManager
+    ? new DockerBackend(containerManager)
+    : undefined;
+
+  // Create tools array
+  const tools = [createWebFetchTool()];
+
   const agent = createDeepAgent({
     model,
     systemPrompt: `You are a CTF (Capture The Flag) challenge solver specializing in ${category} challenges. Your goal is to find the flag. Analyze the challenge, use available tools to investigate, and extract the flag.
@@ -125,6 +138,8 @@ ${challenge}
 
 When you find the flag, output it clearly in the format: flag{...} or the appropriate format for the challenge.`,
     skills: skills ?? [],
+    backend,
+    tools,
     middleware: [
       createProgressTrackerMiddleware({
         taskId: "live",

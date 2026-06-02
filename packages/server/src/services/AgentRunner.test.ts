@@ -2,12 +2,21 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("deepagents", () => ({
   createDeepAgent: vi.fn(),
+  BaseSandbox: class BaseSandbox {},
 }));
 
 vi.mock("@langchain/core/messages", () => ({
   SystemMessage: class SystemMessage {
     constructor(public opts: any) {}
   },
+}));
+
+vi.mock("../backends/docker.js", () => ({
+  DockerBackend: class DockerBackend {},
+}));
+
+vi.mock("../tools/web_fetch.js", () => ({
+  createWebFetchTool: () => ({ name: "web_fetch" }),
 }));
 
 const { createChatModel } = await import("./AgentRunner.js");
