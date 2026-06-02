@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Hoist the in-memory database setup
-const { testSqlite, mcTable, saTable, tTable, seTable } = vi.hoisted(() => {
+const { testSqlite, mcTable, saTable, tTable, seTable, mcpTable, acTable } = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const Database = require("better-sqlite3");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -55,6 +55,20 @@ const { testSqlite, mcTable, saTable, tTable, seTable } = vi.hoisted(() => {
       path TEXT NOT NULL, source TEXT NOT NULL, enabled INTEGER DEFAULT 1,
       created_at INTEGER NOT NULL
     );
+    CREATE TABLE mcp_configs (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, transport TEXT NOT NULL,
+      command TEXT, args_json TEXT, env_json TEXT, url TEXT,
+      headers_json TEXT, tool_mapping_json TEXT,
+      is_running INTEGER DEFAULT 0, last_tested_at INTEGER,
+      test_status TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    );
+    CREATE TABLE api_connector_configs (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, base_url TEXT NOT NULL,
+      auth_type TEXT NOT NULL, auth_config_json TEXT,
+      endpoints_json TEXT NOT NULL, response_parsing_json TEXT NOT NULL,
+      last_tested_at INTEGER, test_status TEXT,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+    );
   `);
 
   const mcTable = sqliteTable("model_configs", {
@@ -89,16 +103,33 @@ const { testSqlite, mcTable, saTable, tTable, seTable } = vi.hoisted(() => {
     type: text("type").notNull(), timestamp: integer("timestamp").notNull(), dataJson: text("data_json"),
     status: text("status").notNull(), depth: integer("depth").notNull(),
   });
+  const mcpTable = sqliteTable("mcp_configs", {
+    id: text("id").primaryKey(), name: text("name").notNull(), transport: text("transport").notNull(),
+    command: text("command"), argsJson: text("args_json"), envJson: text("env_json"),
+    url: text("url"), headersJson: text("headers_json"), toolMappingJson: text("tool_mapping_json"),
+    isRunning: integer("is_running", { mode: "boolean" }).default(false),
+    lastTestedAt: integer("last_tested_at", { mode: "timestamp" }), testStatus: text("test_status"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  });
+  const acTable = sqliteTable("api_connector_configs", {
+    id: text("id").primaryKey(), name: text("name").notNull(), baseUrl: text("base_url").notNull(),
+    authType: text("auth_type").notNull(), authConfigJson: text("auth_config_json"),
+    endpointsJson: text("endpoints_json").notNull(), responseParsingJson: text("response_parsing_json").notNull(),
+    lastTestedAt: integer("last_tested_at", { mode: "timestamp" }), testStatus: text("test_status"),
+    createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+  });
 
-  return { testSqlite, mcTable, saTable, tTable, seTable };
+  return { testSqlite, mcTable, saTable, tTable, seTable, mcpTable, acTable };
 });
 
 // Mock the db module
 vi.mock("../db/index.js", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { drizzle } = require("drizzle-orm/better-sqlite3");
-  const db = drizzle(testSqlite, { modelConfigs: mcTable, subagentConfigs: saTable, tasks: tTable, streamEvents: seTable });
-  return { db, sqlite: testSqlite, modelConfigs: mcTable, subagentConfigs: saTable, tasks: tTable, streamEvents: seTable };
+  const db = drizzle(testSqlite, { modelConfigs: mcTable, subagentConfigs: saTable, tasks: tTable, streamEvents: seTable, mcpConfigs: mcpTable, apiConnectorConfigs: acTable });
+  return { db, sqlite: testSqlite, modelConfigs: mcTable, subagentConfigs: saTable, tasks: tTable, streamEvents: seTable, mcpConfigs: mcpTable, apiConnectorConfigs: acTable };
 });
 
 // Mock AgentRunner
@@ -134,7 +165,7 @@ function createTestApp() {
 
 describe("Integration: API Endpoints", () => {
   beforeEach(() => {
-    testSqlite.exec("DELETE FROM stream_events; DELETE FROM tasks; DELETE FROM subagent_configs; DELETE FROM model_configs;");
+    testSqlite.exec("DELETE FROM stream_events; DELETE FROM tasks; DELETE FROM subagent_configs; DELETE FROM model_configs; DELETE FROM mcp_configs; DELETE FROM api_connector_configs;");
   });
 
   it("GET /api/health returns ok", async () => {

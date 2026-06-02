@@ -93,3 +93,34 @@ export const skills = sqliteTable("skills", {
   enabled: integer("enabled", { mode: "boolean" }).default(true),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
+
+export const mcpConfigs = sqliteTable("mcp_configs", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  transport: text("transport").notNull(), // 'stdio' | 'sse'
+  command: text("command"),
+  argsJson: text("args_json"),
+  envJson: text("env_json"),
+  url: text("url"),
+  headersJson: text("headers_json"),
+  toolMappingJson: text("tool_mapping_json"),
+  isRunning: integer("is_running", { mode: "boolean" }).default(false),
+  lastTestedAt: integer("last_tested_at", { mode: "timestamp" }),
+  testStatus: text("test_status"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const apiConnectorConfigs = sqliteTable("api_connector_configs", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  baseUrl: text("base_url").notNull(),
+  authType: text("auth_type").notNull(),
+  authConfigJson: text("auth_config_json"),
+  endpointsJson: text("endpoints_json").notNull(),
+  responseParsingJson: text("response_parsing_json").notNull(),
+  lastTestedAt: integer("last_tested_at", { mode: "timestamp" }),
+  testStatus: text("test_status"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
