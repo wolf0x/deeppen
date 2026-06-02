@@ -4,6 +4,10 @@ const nav = [
   { path: "/", label: "Tasks", icon: "📋" },
   { path: "/tasks/new", label: "New Task", icon: "➕" },
   { path: "/config/models", label: "Models", icon: "🤖" },
+  { path: "/config/agents", label: "Sub-Agents", icon: "👥" },
+  { path: "/config/mcp", label: "MCP", icon: "🔌" },
+  { path: "/config/skills", label: "Skills", icon: "🧩" },
+  { path: "/config/container", label: "Container", icon: "🐳" },
 ];
 
 export function Sidebar() {
