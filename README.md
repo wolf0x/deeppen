@@ -74,7 +74,7 @@ An AI-powered penetration testing harness that automatically solves CTF (Capture
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/deeppen.git
+git clone https://github.com/wolf0x/deeppen.git
 cd deeppen
 
 # Start the full stack
@@ -95,7 +95,7 @@ This starts three services:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/deeppen.git
+git clone https://github.com/wolf0x/deeppen.git
 cd deeppen
 
 # Install dependencies
