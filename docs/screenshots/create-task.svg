@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="ui-monospace, monospace">
+  <rect width="1200" height="700" fill="#0d1117"/>
+  <!-- Sidebar -->
+  <rect x="0" y="0" width="200" height="700" fill="#161b22"/>
+  <text x="20" y="38" fill="#4fc3f7" font-size="18" font-weight="bold">🏴‍☠️ DeepPen</text>
+  <text x="36" y="132" fill="#e6edff" font-size="13">➕ New Task</text>
+  <rect x="8" y="112" width="184" height="36" rx="6" fill="#1c2128"/>
+  <!-- Main content -->
+  <text x="232" y="44" fill="#e6edff" font-size="24" font-weight="bold">Create New Task</text>
+  <!-- Form -->
+  <text x="232" y="90" fill="#8b949e" font-size="13">Task Name</text>
+  <rect x="232" y="100" width="700" height="36" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="248" y="124" fill="#8b949e" font-size="12">e.g., HTB Web Challenge 1</text>
+  <text x="232" y="160" fill="#8b949e" font-size="13">Challenge Description</text>
+  <rect x="232" y="170" width="700" height="140" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="248" y="194" fill="#8b949e" font-size="12">Paste the challenge description here...</text>
+  <text x="232" y="340" fill="#8b949e" font-size="13">Category</text>
+  <!-- Category buttons -->
+  <rect x="232" y="350" width="150" height="40" rx="6" fill="#161b22" stroke="#4fc3f7"/>
+  <text x="248" y="376" fill="#4fc3f7" font-size="12">🌐 Web Security</text>
+  <rect x="394" y="350" width="150" height="40" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="410" y="376" fill="#8b949e" font-size="12">💀 Pwn/Binary</text>
+  <rect x="556" y="350" width="150" height="40" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="572" y="376" fill="#8b949e" font-size="12">🔐 Crypto</text>
+  <rect x="718" y="350" width="150" height="40" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="734" y="376" fill="#8b949e" font-size="12">🔍 Forensics/RE</text>
+  <rect x="232" y="400" width="150" height="40" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="248" y="426" fill="#8b949e" font-size="12">📦 Misc</text>
+  <rect x="394" y="400" width="150" height="40" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="410" y="426" fill="#8b949e" font-size="12">💉 Prompt Injection</text>
+  <!-- Model selector -->
+  <text x="232" y="476" fill="#8b949e" font-size="13">Model</text>
+  <rect x="232" y="486" width="700" height="36" rx="6" fill="#161b22" stroke="#30363d"/>
+  <text x="248" y="510" fill="#e6edff" font-size="12">Claude Sonnet 4.6 (anthropic) ▼</text>
+  <!-- Submit button -->
+  <rect x="232" y="550" width="140" height="40" rx="6" fill="#4fc3f7"/>
+  <text x="264" y="576" fill="#0d1117" font-size="14" font-weight="bold">Create Task</text>
+</svg>
