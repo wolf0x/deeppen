@@ -29,9 +29,25 @@ export function ModelConfig() {
 
   const [error, setError] = useState<string | null>(null);
 
+  // Providers that don't require an API key
+  const noKeyProviders = ["ollama"];
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Validate API key for providers that need it
+    if (!noKeyProviders.includes(provider) && !apiKey.trim()) {
+      setError(`API key is required for ${provider}`);
+      return;
+    }
+
+    // Validate base URL for providers that need it
+    if ((provider === "openai-compatible" || provider === "azure-openai" || provider === "ollama") && !baseUrl.trim()) {
+      setError(`Base URL is required for ${provider}`);
+      return;
+    }
+
     try {
       await api.createModel({ name, provider, apiKey, baseUrl, modelId });
       setShowForm(false);
@@ -79,11 +95,20 @@ export function ModelConfig() {
             {providers.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
           <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-            placeholder="API Key"
-            className="w-full px-3 py-2 bg-bg-elevated border border-border rounded text-text-primary focus:border-accent-blue focus:outline-none" />
-          <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="Base URL (optional)"
-            className="w-full px-3 py-2 bg-bg-elevated border border-border rounded text-text-primary focus:border-accent-blue focus:outline-none" />
+            placeholder={noKeyProviders.includes(provider) ? "API Key (not needed for Ollama)" : "API Key *"}
+            className={`w-full px-3 py-2 bg-bg-elevated border rounded text-text-primary focus:border-accent-blue focus:outline-none ${
+              !noKeyProviders.includes(provider) && !apiKey ? "border-accent-orange" : "border-border"
+            }`} />
+          {(provider === "openai-compatible" || provider === "azure-openai" || provider === "ollama") && (
+            <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="Base URL * (required)"
+              className="w-full px-3 py-2 bg-bg-elevated border border-accent-orange rounded text-text-primary focus:border-accent-blue focus:outline-none" />
+          )}
+          {provider !== "openai-compatible" && provider !== "azure-openai" && provider !== "ollama" && (
+            <input type="text" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
+              placeholder="Base URL (optional)"
+              className="w-full px-3 py-2 bg-bg-elevated border border-border rounded text-text-primary focus:border-accent-blue focus:outline-none" />
+          )}
           <input type="text" value={modelId} onChange={(e) => setModelId(e.target.value)}
             placeholder="Model ID (e.g., claude-sonnet-4-6)"
             className="w-full px-3 py-2 bg-bg-elevated border border-border rounded text-text-primary focus:border-accent-blue focus:outline-none"
