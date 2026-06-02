@@ -2,8 +2,17 @@
   "name": "deeppen",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter @deeppen/server dev",
-    "build": "pnpm --filter @deeppen/shared build && pnpm --filter @deeppen/server build",
-    "start": "pnpm --filter @deeppen/server start"
+    "dev": "concurrently \"pnpm --filter @deeppen/server dev\" \"pnpm --filter @deeppen/web dev\"",
+    "dev:server": "pnpm --filter @deeppen/server dev",
+    "dev:web": "pnpm --filter @deeppen/web dev",
+    "build": "pnpm --filter @deeppen/shared build && pnpm --filter @deeppen/server build && pnpm --filter @deeppen/web build",
+    "start": "pnpm --filter @deeppen/server start",
+    "test": "pnpm --filter @deeppen/server test",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
   }
 }
