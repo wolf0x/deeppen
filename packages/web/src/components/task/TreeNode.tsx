@@ -18,6 +18,9 @@ const typeConfig: Record<string, { icon: string; color: string; label: string }>
   "task-error": { icon: "❌", color: "text-accent-red", label: "Error" },
 };
 
+// Types that can expand to show full content
+const EXPANDABLE_TYPES = new Set(["tool-call", "tool-result", "agent-response", "agent-think"]);
+
 export function TreeNode({ event, children, defaultExpanded = true }: {
   event: StreamEvent;
   children?: React.ReactNode;
@@ -26,8 +29,9 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const config = typeConfig[event.type] ?? { icon: "•", color: "text-text-secondary", label: event.type };
   const hasChildren = !!children;
+  const canExpand = hasChildren || EXPANDABLE_TYPES.has(event.type);
 
-  // Auto-collapse only agent-think events (not tool events)
+  // Auto-collapse only agent-think events
   useEffect(() => {
     if (event.status === "complete" && event.type === "agent-think") {
       const timer = setTimeout(() => setExpanded(false), 8000);
@@ -44,46 +48,54 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
 
   const data = event.data ?? {};
 
-  // Build display content based on event type
-  let content = "";
+  // Extract content based on event type
+  let fullContent = "";
+  let preview = "";
   let detail = "";
 
   if (event.type === "tool-call") {
-    // Show tool name and input
-    content = data.toolName ?? "";
+    preview = data.toolName ?? "";
     if (data.toolInput) {
       const inputObj = data.toolInput as any;
-      const input = typeof inputObj === "string"
-        ? inputObj
-        : inputObj.command ?? inputObj.url ?? JSON.stringify(inputObj);
-      detail = input.slice(0, 200);
+      fullContent = typeof inputObj === "string" ? inputObj : JSON.stringify(inputObj, null, 2);
+      detail = fullContent.length > 80 ? fullContent.slice(0, 80) + "…" : fullContent;
     }
   } else if (event.type === "tool-result") {
-    // Show tool output
-    content = data.toolOutput ?? data.error ?? "";
-    if (data.error) content = `❌ ${content}`;
+    fullContent = data.toolOutput ?? data.error ?? "";
+    if (data.error) fullContent = `❌ ${fullContent}`;
+    preview = fullContent.length > 100 ? fullContent.slice(0, 100) + "…" : fullContent;
+  } else if (event.type === "agent-response") {
+    fullContent = data.content ?? "";
+    preview = fullContent.length > 120 ? fullContent.slice(0, 120) + "…" : fullContent;
   } else {
-    // agent-response, agent-think, flag-found, etc.
-    content = data.content ?? data.flag ?? data.error ?? "";
+    // agent-think, flag-found, etc.
+    fullContent = data.content ?? data.flag ?? data.error ?? "";
+    preview = fullContent.length > 120 ? fullContent.slice(0, 120) + "…" : fullContent;
   }
+
+  const hasLongContent = fullContent.length > 120;
 
   return (
     <div>
+      {/* Header row */}
       <div
-        className="flex items-center gap-2 py-0.5 hover:bg-bg-elevated rounded px-1 cursor-default"
+        className={`flex items-center gap-2 py-0.5 hover:bg-bg-elevated rounded px-1 ${canExpand ? "cursor-pointer" : "cursor-default"}`}
         style={{ paddingLeft: `${event.depth * 20}px` }}
+        onClick={() => canExpand && setExpanded(!expanded)}
       >
-        {hasChildren ? (
-          <button onClick={() => setExpanded(!expanded)} className="w-4 text-text-secondary text-xs">
+        {/* Expand/collapse toggle */}
+        {canExpand ? (
+          <button className="w-4 text-text-secondary text-xs" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
             {expanded ? "▼" : "▶"}
           </button>
         ) : (
           <span className="w-4" />
         )}
+
         <span className={config.color}>{config.icon}</span>
         <span className={`${config.color} text-xs font-medium`}>{config.label}</span>
 
-        {/* Tool name badge for tool-call */}
+        {/* Tool name badge */}
         {event.type === "tool-call" && data.toolName && (
           <span className="bg-accent-blue/20 text-accent-blue px-1.5 py-0.5 rounded text-xs font-mono">
             {data.toolName}
@@ -93,22 +105,20 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
         {/* Running indicator */}
         {event.status === "running" && <span className="w-2 h-2 bg-accent-blue rounded-full animate-pulse" />}
 
-        {/* Detail (tool input, etc.) */}
-        {detail && (
-          <span className="text-text-secondary/70 text-xs font-mono truncate max-w-sm">
-            {detail}
-          </span>
-        )}
-
-        {/* Content (tool output, response text, etc.) */}
-        {content && (
-          <span className={`text-xs truncate max-w-md ${
+        {/* Inline preview (truncated) */}
+        {!expanded && preview && (
+          <span className={`text-xs truncate max-w-lg ${
             event.type === "tool-result" ? "text-text-secondary font-mono" :
             event.type === "flag-found" ? "text-accent-green font-bold" :
             "text-text-secondary"
           }`}>
-            {typeof content === "string" ? content.slice(0, 200) : JSON.stringify(content).slice(0, 200)}
+            {preview}
           </span>
+        )}
+
+        {/* Expand hint */}
+        {!expanded && hasLongContent && (
+          <span className="text-text-secondary/40 text-xs">click to expand</span>
         )}
 
         {/* Flag badge */}
@@ -116,6 +126,21 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
           <span className="bg-accent-green/20 text-accent-green px-2 py-0.5 rounded text-xs font-bold">{data.flag}</span>
         )}
       </div>
+
+      {/* Expanded content */}
+      {expanded && !hasChildren && fullContent && (
+        <div className="ml-10 my-1">
+          <pre className={`text-xs p-2 rounded border border-border overflow-auto max-h-96 whitespace-pre-wrap break-words ${
+            event.type === "tool-result" ? "bg-bg-elevated text-text-secondary font-mono" :
+            event.type === "tool-call" ? "bg-bg-elevated text-text-secondary font-mono" :
+            "text-text-secondary"
+          }`}>
+            {fullContent}
+          </pre>
+        </div>
+      )}
+
+      {/* Children (sub-nodes) */}
       {expanded && hasChildren && <div className="border-l border-border ml-4">{children}</div>}
     </div>
   );
