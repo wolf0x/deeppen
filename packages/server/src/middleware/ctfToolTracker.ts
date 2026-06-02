@@ -1,4 +1,4 @@
-import { createMiddleware } from "deepagents";
+import { createMiddleware } from "langchain";
 import type { StreamEvent } from "@deeppen/shared";
 import { extractFlags } from "./ctfFlagExtractor.js";
 
@@ -11,12 +11,12 @@ export interface ToolTrackerOptions {
  * Middleware that emits tool-call and tool-result stream events,
  * and scans tool outputs for flags.
  */
-export function createToolTrackerMiddleware(options: ToolTrackerOptions) {
+export function createToolTrackerMiddleware(options: ToolTrackerOptions): any {
   const { onStreamEvent, onFlagFound } = options;
 
   return createMiddleware({
     name: "CtfToolTracker",
-    wrapModelCall: async (request, handler) => {
+    wrapModelCall: async (request: any, handler: any) => {
       // Emit tool-call events for any tool calls in the request
       const lastMessage = request.messages?.[request.messages.length - 1];
       if (
@@ -77,7 +77,7 @@ export function createToolTrackerMiddleware(options: ToolTrackerOptions) {
               parentId: `result-${tc.id ?? Date.now()}`,
               type: "flag-found",
               timestamp: Date.now(),
-              data: { flag, source: "tool-output" },
+              data: { flag, content: "Found in tool output" },
               status: "complete",
               depth: 4,
             });

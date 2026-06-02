@@ -17,7 +17,7 @@ import { WriteupGenerator } from "./services/WriteupGenerator.js";
 import { createWriteupRoutes } from "./routes/writeups.js";
 
 const PORT = parseInt(process.env.PORT ?? "4000");
-const app = express();
+const app: any = express();
 
 app.use(express.json());
 

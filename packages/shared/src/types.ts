@@ -30,7 +30,7 @@ export const TaskConfigSchema = z.object({
     maxSubagentDepth: z.number().default(3),
     pivotStrategy: z.enum(["different-approach", "ask-user", "stop"]).default("different-approach"),
   }).optional(),
-  autoSubmit: z.boolean().default(true),
+  autoSubmit: z.boolean().optional().default(true),
 });
 export type TaskConfig = z.infer<typeof TaskConfigSchema>;
 

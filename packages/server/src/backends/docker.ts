@@ -49,12 +49,12 @@ export class DockerBackend extends BaseSandbox {
         const cmd = `mkdir -p ${JSON.stringify(dir)} && echo '${b64}' | base64 -d > ${JSON.stringify(path)}`;
         const result = await this.manager.execute(cmd);
         if (result.exitCode !== 0) {
-          results.push({ path, error: "file_operation_failed" });
+          results.push({ path, error: "permission_denied" });
         } else {
           results.push({ path, error: null });
         }
       } catch {
-        results.push({ path, error: "file_operation_failed" });
+        results.push({ path, error: "permission_denied" });
       }
     }
     return results;
@@ -77,7 +77,7 @@ export class DockerBackend extends BaseSandbox {
           results.push({ path, content, error: null });
         }
       } catch {
-        results.push({ path, content: null, error: "file_operation_failed" });
+        results.push({ path, content: null, error: "permission_denied" });
       }
     }
     return results;

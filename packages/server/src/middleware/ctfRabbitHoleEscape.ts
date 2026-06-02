@@ -1,5 +1,4 @@
-import { createMiddleware } from "deepagents";
-import { SystemMessage } from "@langchain/core/messages";
+import { createMiddleware, SystemMessage } from "langchain";
 
 export interface RabbitHoleEscapeOptions {
   /** Maximum number of model calls before forcing a pivot */
@@ -19,7 +18,7 @@ export interface RabbitHoleEscapeOptions {
  * instructing it to pivot to a different approach or stop entirely.
  * This prevents the agent from going down unproductive rabbit holes.
  */
-export function createRabbitHoleEscapeMiddleware(options: RabbitHoleEscapeOptions) {
+export function createRabbitHoleEscapeMiddleware(options: RabbitHoleEscapeOptions): any {
   const { maxIterations, maxTimeMinutes, pivotStrategy, onEscape } = options;
   let iterationCount = 0;
   const startTime = Date.now();
@@ -28,7 +27,7 @@ export function createRabbitHoleEscapeMiddleware(options: RabbitHoleEscapeOption
 
   return createMiddleware({
     name: "CtfRabbitHoleEscape",
-    wrapModelCall: async (request, handler) => {
+    wrapModelCall: async (request: any, handler: any) => {
       iterationCount++;
       const elapsedMinutes = (Date.now() - startTime) / 60_000;
 

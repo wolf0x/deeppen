@@ -2,7 +2,7 @@ import { createDeepAgent } from "deepagents";
 import type { SubAgent } from "deepagents";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+type BaseChatModel = any; // from @langchain/core, not directly importable in pnpm
 import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createFlagExtractorMiddleware } from "../middleware/ctfFlagExtractor.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
@@ -43,9 +43,9 @@ export function createChatModel(config: ModelConfig): BaseChatModel {
     case "azure-openai":
       return new ChatOpenAI({
         ...common,
-        azureOpenAIApiKey: config.apiKey,
-        azureOpenAIBasePath: config.baseUrl,
+        openAIApiKey: config.apiKey,
         model: config.modelId,
+        configuration: { baseURL: config.baseUrl },
       });
 
     // These providers all use OpenAI-compatible API format

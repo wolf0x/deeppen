@@ -140,6 +140,7 @@ describe("TaskManager", () => {
       name: "Test Task",
       challenge: { description: "Find the flag", category: "web" },
       modelId: "test-model",
+      autoSubmit: true,
     });
     expect(id).toBeDefined();
     expect(typeof id).toBe("string");
@@ -151,6 +152,7 @@ describe("TaskManager", () => {
       name: "My Task",
       challenge: { description: "Solve this", category: "crypto" },
       modelId: "test-model",
+      autoSubmit: true,
     });
     const task = await tm.getTask(id);
     expect(task).not.toBeNull();
@@ -160,8 +162,8 @@ describe("TaskManager", () => {
   });
 
   it("lists tasks", async () => {
-    await tm.create({ name: "Task 1", challenge: { description: "A", category: "web" }, modelId: "test-model" });
-    await tm.create({ name: "Task 2", challenge: { description: "B", category: "pwn" }, modelId: "test-model" });
+    await tm.create({ name: "Task 1", challenge: { description: "A", category: "web" }, modelId: "test-model", autoSubmit: true });
+    await tm.create({ name: "Task 2", challenge: { description: "B", category: "pwn" }, modelId: "test-model", autoSubmit: true });
     const allTasks = await tm.listTasks();
     expect(allTasks.length).toBe(2);
   });

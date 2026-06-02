@@ -1,4 +1,4 @@
-import { createMiddleware } from "deepagents";
+import { createMiddleware } from "langchain";
 import { v4 as uuid } from "uuid";
 import type { ProgressEntry } from "@deeppen/shared";
 
@@ -16,14 +16,14 @@ export interface ProgressTrackerOptions {
  * Uses wrapModelCall to observe what tools the model requested, then after the
  * model responds, emits a progress entry summarizing the recent activity.
  */
-export function createProgressTrackerMiddleware(options: ProgressTrackerOptions) {
+export function createProgressTrackerMiddleware(options: ProgressTrackerOptions): any {
   const { taskId, onProgress } = options;
   const toolCallsBuffer: string[] = [];
   let currentApproach = "initial-analysis";
 
   return createMiddleware({
     name: "CtfProgressTracker",
-    wrapModelCall: async (request, handler) => {
+    wrapModelCall: async (request: any, handler: any) => {
       // Track which tools were called in the previous turn
       const lastMessage = request.messages?.[request.messages.length - 1];
       if (

@@ -1,4 +1,4 @@
-import { createMiddleware } from "deepagents";
+import { createMiddleware } from "langchain";
 import { FLAG_PATTERNS } from "@deeppen/shared";
 
 /**
@@ -42,7 +42,7 @@ export interface FlagExtractorOptions {
  * Uses wrapModelCall to intercept the response after the model generates it.
  * When flags are found, calls onFlagFound callback with each flag.
  */
-export function createFlagExtractorMiddleware(options: FlagExtractorOptions = {}) {
+export function createFlagExtractorMiddleware(options: FlagExtractorOptions = {}): any {
   const { onFlagFound, customPatterns = [] } = options;
   const allPatterns = [...FLAG_PATTERNS, ...customPatterns];
 
@@ -61,7 +61,7 @@ export function createFlagExtractorMiddleware(options: FlagExtractorOptions = {}
 
   return createMiddleware({
     name: "CtfFlagExtractor",
-    wrapModelCall: async (request, handler) => {
+    wrapModelCall: async (request: any, handler: any) => {
       const response = await handler(request);
 
       // Extract text content from response
