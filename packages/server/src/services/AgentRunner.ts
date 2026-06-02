@@ -4,15 +4,117 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
 type BaseChatModel = any; // from @langchain/core, not directly importable in pnpm
 import type { ModelConfig, StreamEvent } from "@deeppen/shared";
-import { createFlagExtractorMiddleware } from "../middleware/ctfFlagExtractor.js";
+import { extractFlags } from "../middleware/ctfFlagExtractor.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
-import { createToolTrackerMiddleware } from "../middleware/ctfToolTracker.js";
+import { createFlagExtractorMiddleware } from "../middleware/ctfFlagExtractor.js";
 import { DockerBackend } from "../backends/docker.js";
 import { LocalBackend } from "../backends/local.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
 import { getDefaultShellTools } from "../tools/shell.js";
 import type { ContainerManager } from "./ContainerManager.js";
+
+let toolCounter = 0;
+
+/**
+ * Wrap a tool to emit stream events before/after execution.
+ * This is more reliable than middleware wrapToolCall hooks.
+ */
+function wrapToolWithEvents(
+  tool: any,
+  onStreamEvent: (event: StreamEvent) => void,
+  onFlagFound: (flag: string) => void,
+): any {
+  const originalCall = tool.call.bind(tool);
+  const wrapped = Object.create(tool);
+
+  wrapped.call = async (input: any, ...rest: any[]) => {
+    const toolCallId = `tool-${++toolCounter}`;
+
+    // Emit tool-call event
+    onStreamEvent({
+      id: toolCallId,
+      parentId: null,
+      type: "tool-call",
+      timestamp: Date.now(),
+      data: {
+        toolName: tool.name,
+        toolInput: input,
+      },
+      status: "running",
+      depth: 2,
+    });
+
+    try {
+      const result = await originalCall(input, ...rest);
+
+      // Extract output text
+      let output: string;
+      if (typeof result === "string") {
+        output = result;
+      } else if (typeof result?.output === "string") {
+        output = result.output;
+      } else if (typeof result?.content === "string") {
+        output = result.content;
+      } else if (Array.isArray(result?.content)) {
+        output = result.content
+          .filter((b: any) => b.type === "text")
+          .map((b: any) => b.text)
+          .join("");
+      } else {
+        output = JSON.stringify(result);
+      }
+
+      // Emit tool-result event
+      onStreamEvent({
+        id: `result-${toolCounter}`,
+        parentId: toolCallId,
+        type: "tool-result",
+        timestamp: Date.now(),
+        data: {
+          toolName: tool.name,
+          toolOutput: output.slice(0, 1000),
+        },
+        status: "complete",
+        depth: 3,
+      });
+
+      // Scan for flags
+      const flags = extractFlags(output);
+      for (const flag of flags) {
+        onStreamEvent({
+          id: `flag-tool-${Date.now()}`,
+          parentId: `result-${toolCounter}`,
+          type: "flag-found",
+          timestamp: Date.now(),
+          data: { flag, content: "Found in tool output" },
+          status: "complete",
+          depth: 4,
+        });
+        onFlagFound(flag);
+      }
+
+      return result;
+    } catch (err: any) {
+      onStreamEvent({
+        id: `result-${toolCounter}`,
+        parentId: toolCallId,
+        type: "tool-result",
+        timestamp: Date.now(),
+        data: {
+          toolName: tool.name,
+          toolOutput: `Error: ${err.message}`,
+          error: err.message,
+        },
+        status: "error",
+        depth: 3,
+      });
+      throw err;
+    }
+  };
+
+  return wrapped;
+}
 
 /**
  * Create a LangChain chat model from a ModelConfig.
@@ -127,14 +229,17 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   const model = createChatModel(modelConfig);
   let foundFlag: string | null = null;
   const events: StreamEvent[] = [];
+  const emit = onStreamEvent ?? (() => {});
+  const emitFlag = onFlagFound ?? (() => {});
 
   // Use Docker backend if container is available, otherwise local backend
   const backend = containerManager
     ? new DockerBackend(containerManager)
     : new LocalBackend();
 
-  // Always include web_fetch + shell tools (curl, wget, ssh, nc)
-  const tools = [createWebFetchTool(), ...getDefaultShellTools()];
+  // Wrap custom tools with event tracking
+  const rawTools = [createWebFetchTool(), ...getDefaultShellTools()];
+  const tools = rawTools.map((t) => wrapToolWithEvents(t, emit, emitFlag));
 
   // If no skills specified, load skills matching the category
   const effectiveSkills = skills && skills.length > 0 ? skills : [`/skills/${category}/`];
@@ -180,7 +285,6 @@ Available skills for this challenge type have been loaded. Read their instructio
     tools,
     subagents: options.subagents ?? [],
     middleware: [
-      createToolTrackerMiddleware({ onStreamEvent, onFlagFound }),
       createProgressTrackerMiddleware({
         taskId: "live",
         onProgress: (entry) => {
@@ -194,7 +298,7 @@ Available skills for this challenge type have been loaded. Read their instructio
             depth: 0,
           };
           events.push(event);
-          onStreamEvent?.(event);
+          emit(event);
         },
       }),
       createRabbitHoleEscapeMiddleware({
@@ -212,7 +316,7 @@ Available skills for this challenge type have been loaded. Read their instructio
             depth: 0,
           };
           events.push(event);
-          onStreamEvent?.(event);
+          emit(event);
         },
       }),
       createFlagExtractorMiddleware({
@@ -228,11 +332,22 @@ Available skills for this challenge type have been loaded. Read their instructio
             depth: 0,
           };
           events.push(event);
-          onStreamEvent?.(event);
-          onFlagFound?.(flag);
+          emit(event);
+          emitFlag(flag);
         },
       }),
     ],
+  });
+
+  // Emit agent-start event
+  emit({
+    id: `agent-start-${Date.now()}`,
+    parentId: null,
+    type: "agent-start",
+    timestamp: Date.now(),
+    data: {},
+    status: "complete",
+    depth: 0,
   });
 
   const result = await agent.invoke(
