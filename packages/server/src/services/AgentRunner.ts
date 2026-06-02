@@ -4,117 +4,14 @@ import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
 type BaseChatModel = any; // from @langchain/core, not directly importable in pnpm
 import type { ModelConfig, StreamEvent } from "@deeppen/shared";
-import { extractFlags } from "../middleware/ctfFlagExtractor.js";
+import { createStreamEmitterMiddleware } from "../middleware/streamEmitter.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
 import { createFlagExtractorMiddleware } from "../middleware/ctfFlagExtractor.js";
 import { DockerBackend } from "../backends/docker.js";
 import { LocalBackend } from "../backends/local.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
-import { getDefaultShellTools } from "../tools/shell.js";
 import type { ContainerManager } from "./ContainerManager.js";
-
-let toolCounter = 0;
-
-/**
- * Wrap a tool to emit stream events before/after execution.
- * This is more reliable than middleware wrapToolCall hooks.
- */
-function wrapToolWithEvents(
-  tool: any,
-  onStreamEvent: (event: StreamEvent) => void,
-  onFlagFound: (flag: string) => void,
-): any {
-  const originalCall = tool.call.bind(tool);
-  const wrapped = Object.create(tool);
-
-  wrapped.call = async (input: any, ...rest: any[]) => {
-    const toolCallId = `tool-${++toolCounter}`;
-
-    // Emit tool-call event
-    onStreamEvent({
-      id: toolCallId,
-      parentId: null,
-      type: "tool-call",
-      timestamp: Date.now(),
-      data: {
-        toolName: tool.name,
-        toolInput: input,
-      },
-      status: "running",
-      depth: 2,
-    });
-
-    try {
-      const result = await originalCall(input, ...rest);
-
-      // Extract output text
-      let output: string;
-      if (typeof result === "string") {
-        output = result;
-      } else if (typeof result?.output === "string") {
-        output = result.output;
-      } else if (typeof result?.content === "string") {
-        output = result.content;
-      } else if (Array.isArray(result?.content)) {
-        output = result.content
-          .filter((b: any) => b.type === "text")
-          .map((b: any) => b.text)
-          .join("");
-      } else {
-        output = JSON.stringify(result);
-      }
-
-      // Emit tool-result event
-      onStreamEvent({
-        id: `result-${toolCounter}`,
-        parentId: toolCallId,
-        type: "tool-result",
-        timestamp: Date.now(),
-        data: {
-          toolName: tool.name,
-          toolOutput: output.slice(0, 1000),
-        },
-        status: "complete",
-        depth: 3,
-      });
-
-      // Scan for flags
-      const flags = extractFlags(output);
-      for (const flag of flags) {
-        onStreamEvent({
-          id: `flag-tool-${Date.now()}`,
-          parentId: `result-${toolCounter}`,
-          type: "flag-found",
-          timestamp: Date.now(),
-          data: { flag, content: "Found in tool output" },
-          status: "complete",
-          depth: 4,
-        });
-        onFlagFound(flag);
-      }
-
-      return result;
-    } catch (err: any) {
-      onStreamEvent({
-        id: `result-${toolCounter}`,
-        parentId: toolCallId,
-        type: "tool-result",
-        timestamp: Date.now(),
-        data: {
-          toolName: tool.name,
-          toolOutput: `Error: ${err.message}`,
-          error: err.message,
-        },
-        status: "error",
-        depth: 3,
-      });
-      throw err;
-    }
-  };
-
-  return wrapped;
-}
 
 /**
  * Create a LangChain chat model from a ModelConfig.
@@ -198,15 +95,30 @@ export interface RunAgentOptions {
   abortSignal?: AbortSignal;
 }
 
+const CTF_SYSTEM_PROMPT = `You are DeepPen, an autonomous CTF challenge solver.
+
+## Workflow
+1. **Analyze** — determine challenge type, attack vectors, strategy
+2. **Execute** — use tools step by step to investigate and exploit
+3. **Extract** — output the flag clearly as flag{...} or CTF{...} or HTB{...}
+
+## Tools
+- execute: Run any shell command (nmap, sqlmap, curl, gdb, python, etc.)
+- web_fetch: Fetch a URL and return its content
+- ls, read_file, write_file, edit_file, glob, grep: File operations
+- task: Delegate to a subagent for complex sub-tasks
+
+## Rules
+- Read skill instructions before starting if available
+- Work systematically, document findings
+- Pivot approach if stuck`;
+
 /**
- * Create and run a deepagentsjs agent for CTF solving.
+ * Create and run a DeepAgents agent for CTF solving.
  *
- * Assembles the full CTF middleware stack:
- * 1. Progress tracker — records approaches and tool usage
- * 2. Rabbit hole escape — enforces iteration/time limits
- * 3. Flag extractor — detects flags in model responses
- *
- * Returns the found flag (if any), all messages, and stream events.
+ * This is a thin configuration layer — DeepAgents owns the agent loop,
+ * tool execution, skill loading, and subagent delegation.
+ * Stream events are emitted via middleware hooks.
  */
 export async function runCTFAgent(options: RunAgentOptions): Promise<{
   flag: string | null;
@@ -229,62 +141,32 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   const model = createChatModel(modelConfig);
   let foundFlag: string | null = null;
   const events: StreamEvent[] = [];
-  const emit = onStreamEvent ?? (() => {});
-  const emitFlag = onFlagFound ?? (() => {});
 
-  // Use Docker backend if container is available, otherwise local backend
+  // Backend: Docker if available, otherwise local
   const backend = containerManager
     ? new DockerBackend(containerManager)
     : new LocalBackend();
 
-  // Wrap custom tools with event tracking
-  const rawTools = [createWebFetchTool(), ...getDefaultShellTools()];
-  const tools = rawTools.map((t) => wrapToolWithEvents(t, emit, emitFlag));
+  // Custom tools — DeepAgents provides execute, ls, read_file, etc. natively
+  const tools = [createWebFetchTool()];
 
-  // If no skills specified, load skills matching the category
-  const effectiveSkills = skills && skills.length > 0 ? skills : [`/skills/${category}/`];
+  // Skills: load from /skills/{category}/ on the backend filesystem
+  const effectiveSkills = skills?.length ? skills : [`/skills/${category}/`];
 
   const agent = createDeepAgent({
     model,
-    systemPrompt: `You are DeepPen, an autonomous CTF challenge solver. Your workflow:
-
-## Phase 1: Analyze
-When you receive a challenge, FIRST analyze it to determine:
-- What type of challenge is this? (web, pwn, crypto, forensics, misc, prompt-injection)
-- What attack vectors are likely?
-- What tools will you need?
-- What is your strategy?
-
-## Phase 2: Execute
-- Read the skill instructions for this challenge type if available
-- Execute your strategy step by step
-- Use the container tools (nmap, sqlmap, curl, gdb, etc.) via the execute tool
-- Use web_fetch to retrieve web content
-- Use filesystem tools to read/write files
-
-## Phase 3: Extract Flag
-- When you find the flag, output it clearly in format: flag{...} or CTF{...} or HTB{...}
-
-## Available Tools
-- execute: Run any shell command in the Kali container. Use for nmap, sqlmap, curl, gdb, python scripts, etc.
-- web_fetch: Fetch a URL and return its content
-- read_file, write_file, edit_file: File operations in the container workspace
-- ls, glob, grep: Search and list files
-
-Challenge Category: ${category}
-
-Challenge:
-${challenge}
-
-${attachments?.length ? `\nAttached files have been downloaded to /workspace/attachments/\nFiles: ${attachments.join(", ")}` : ""}
-
-Available skills for this challenge type have been loaded. Read their instructions before starting.
-`,
-    skills: effectiveSkills,
-    backend,
+    systemPrompt: CTF_SYSTEM_PROMPT,
     tools,
+    backend,
+    skills: effectiveSkills,
     subagents: options.subagents ?? [],
     middleware: [
+      // Stream events — the ONLY source of tool/model activity events
+      createStreamEmitterMiddleware({
+        onStreamEvent: (e) => { events.push(e); onStreamEvent?.(e); },
+        onFlagFound: (f) => { foundFlag = f; onFlagFound?.(f); },
+      }),
+      // Progress tracking — records approaches for writeup generation
       createProgressTrackerMiddleware({
         taskId: "live",
         onProgress: (entry) => {
@@ -298,9 +180,10 @@ Available skills for this challenge type have been loaded. Read their instructio
             depth: 0,
           };
           events.push(event);
-          emit(event);
+          onStreamEvent?.(event);
         },
       }),
+      // Rabbit hole escape — enforces iteration/time limits
       createRabbitHoleEscapeMiddleware({
         maxIterations: rabbitHole?.maxIterations ?? 50,
         maxTimeMinutes: rabbitHole?.maxTimeMinutes ?? 30,
@@ -316,9 +199,10 @@ Available skills for this challenge type have been loaded. Read their instructio
             depth: 0,
           };
           events.push(event);
-          emit(event);
+          onStreamEvent?.(event);
         },
       }),
+      // Flag extraction — scans model responses for flag patterns
       createFlagExtractorMiddleware({
         onFlagFound: (flag) => {
           foundFlag = flag;
@@ -332,16 +216,16 @@ Available skills for this challenge type have been loaded. Read their instructio
             depth: 0,
           };
           events.push(event);
-          emit(event);
-          emitFlag(flag);
+          onStreamEvent?.(event);
+          onFlagFound?.(flag);
         },
       }),
     ],
   });
 
-  // Emit agent-start event
-  emit({
-    id: `agent-start-${Date.now()}`,
+  // Emit agent-start
+  onStreamEvent?.({
+    id: `start-${Date.now()}`,
     parentId: null,
     type: "agent-start",
     timestamp: Date.now(),
@@ -350,6 +234,7 @@ Available skills for this challenge type have been loaded. Read their instructio
     depth: 0,
   });
 
+  // Invoke the agent — DeepAgents handles the full ReAct loop
   const result = await agent.invoke(
     { messages: [{ role: "user", content: challenge }] },
     { signal: abortSignal },
