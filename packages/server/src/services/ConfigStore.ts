@@ -26,7 +26,7 @@ export class ConfigStore {
       id,
       name: config.name,
       provider: config.provider,
-      apiKeyEncrypted: config.apiKey ?? null,
+      apiKeyEncrypted: config.apiKey?.trim() || null,
       baseUrl: config.baseUrl ?? null,
       modelId: config.modelId,
       maxTokens: config.maxTokens ?? 4096,
@@ -50,7 +50,7 @@ export class ConfigStore {
     if (config.name !== undefined) updateData.name = config.name;
     if (config.provider !== undefined) updateData.provider = config.provider;
     if (config.apiKey !== undefined)
-      updateData.apiKeyEncrypted = config.apiKey;
+      updateData.apiKeyEncrypted = config.apiKey?.trim() || null;
     if (config.baseUrl !== undefined) updateData.baseUrl = config.baseUrl;
     if (config.modelId !== undefined) updateData.modelId = config.modelId;
     if (config.maxTokens !== undefined) updateData.maxTokens = config.maxTokens;

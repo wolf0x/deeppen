@@ -15,6 +15,8 @@ import { createSkillRoutes } from "./routes/skills.js";
 import { createContainerRoutes } from "./routes/container.js";
 import { WriteupGenerator } from "./services/WriteupGenerator.js";
 import { createWriteupRoutes } from "./routes/writeups.js";
+import { ChatService } from "./services/ChatService.js";
+import { createChatRoutes } from "./routes/chat.js";
 
 const PORT = parseInt(process.env.PORT ?? "4000");
 const app: any = express();
@@ -29,6 +31,7 @@ const mcpManager = new MCPManager();
 const apiConnector = new APIConnector();
 const containerManager = new ContainerManager();
 const writeupGenerator = new WriteupGenerator();
+const chatService = new ChatService(configStore, taskManager);
 
 // Wire TaskManager stream events to StreamBridge
 taskManager.on("stream", (taskId: string, event: any) => {
@@ -45,10 +48,11 @@ app.use("/api/config/connectors", createConnectorRoutes(apiConnector));
 app.use("/api/config/skills", createSkillRoutes());
 app.use("/api/config/container", createContainerRoutes(containerManager));
 app.use("/api/writeups", createWriteupRoutes(writeupGenerator));
+app.use("/api/chat", createChatRoutes(chatService, streamBridge));
 
 // Start server
 app.listen(PORT, () => {
   console.log(`DeepPen server running on port ${PORT}`);
 });
 
-export { app, taskManager, configStore, streamBridge, mcpManager, apiConnector, containerManager, writeupGenerator };
+export { app, taskManager, configStore, streamBridge, mcpManager, apiConnector, containerManager, writeupGenerator, chatService };

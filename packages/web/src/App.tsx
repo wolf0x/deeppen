@@ -10,6 +10,7 @@ import { SkillsManager } from "./pages/SkillsManager.js";
 import { ContainerConfig } from "./pages/ContainerConfig.js";
 import { ConnectorConfig } from "./pages/ConnectorConfig.js";
 import { Writeups } from "./pages/Writeups.js";
+import { Chat } from "./pages/Chat.js";
 
 export function App() {
   return (
@@ -17,6 +18,7 @@ export function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/chat" element={<Chat />} />
           <Route path="/tasks/new" element={<TaskCreate />} />
           <Route path="/tasks/:id" element={<TaskDetail />} />
           <Route path="/writeups" element={<Writeups />} />

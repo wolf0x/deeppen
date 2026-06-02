@@ -9,7 +9,9 @@ import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracke
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
 import { createToolTrackerMiddleware } from "../middleware/ctfToolTracker.js";
 import { DockerBackend } from "../backends/docker.js";
+import { LocalBackend } from "../backends/local.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
+import { getDefaultShellTools } from "../tools/shell.js";
 import type { ContainerManager } from "./ContainerManager.js";
 
 /**
@@ -35,7 +37,7 @@ export function createChatModel(config: ModelConfig): BaseChatModel {
     case "openai":
       return new ChatOpenAI({
         ...common,
-        openAIApiKey: config.apiKey,
+        apiKey: config.apiKey,
         model: config.modelId,
         ...(config.baseUrl && { configuration: { baseURL: config.baseUrl } }),
       });
@@ -43,7 +45,7 @@ export function createChatModel(config: ModelConfig): BaseChatModel {
     case "azure-openai":
       return new ChatOpenAI({
         ...common,
-        openAIApiKey: config.apiKey,
+        apiKey: config.apiKey,
         model: config.modelId,
         configuration: { baseURL: config.baseUrl },
       });
@@ -57,7 +59,7 @@ export function createChatModel(config: ModelConfig): BaseChatModel {
     case "openrouter":
       return new ChatOpenAI({
         ...common,
-        openAIApiKey: config.apiKey,
+        apiKey: config.apiKey,
         model: config.modelId,
         configuration: { baseURL: config.baseUrl },
       });
@@ -126,13 +128,13 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   let foundFlag: string | null = null;
   const events: StreamEvent[] = [];
 
-  // Create Docker backend if container manager is provided
+  // Use Docker backend if container is available, otherwise local backend
   const backend = containerManager
     ? new DockerBackend(containerManager)
-    : undefined;
+    : new LocalBackend();
 
-  // Create tools array
-  const tools = [createWebFetchTool()];
+  // Always include web_fetch + shell tools (curl, wget, ssh, nc)
+  const tools = [createWebFetchTool(), ...getDefaultShellTools()];
 
   // If no skills specified, load skills matching the category
   const effectiveSkills = skills && skills.length > 0 ? skills : [`/skills/${category}/`];

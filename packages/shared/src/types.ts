@@ -20,7 +20,7 @@ export const TaskConfigSchema = z.object({
     challengeId: z.string().optional(),
     attachments: z.array(z.string()).optional(),
   }),
-  modelId: z.string(),
+  modelId: z.string().optional(),
   subagentIds: z.array(z.string()).optional(),
   skills: z.array(z.string()).optional(),
   connectorId: z.string().optional(),

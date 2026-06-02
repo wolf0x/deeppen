@@ -51,7 +51,7 @@ export function ModelConfig() {
     try {
       await api.createModel({ name, provider, apiKey, baseUrl, modelId });
       setShowForm(false);
-      setName(""); setApiKey(""); setBaseUrl(""); setModelId("");
+      setName(""); setApiKey(""); setBaseUrl(""); setModelId(""); setProvider("anthropic");
       refresh();
     } catch (err: any) {
       setError(err.message || "Failed to create model");
@@ -63,6 +63,8 @@ export function ModelConfig() {
     try {
       const result = await api.testModel(id);
       setTestResults((prev) => ({ ...prev, [id]: result }));
+    } catch (err: any) {
+      setTestResults((prev) => ({ ...prev, [id]: { ok: false, error: err.message || "Connection test failed" } }));
     } finally {
       setTesting(null);
     }
@@ -70,8 +72,12 @@ export function ModelConfig() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this model config?")) return;
-    await api.deleteModel(id);
-    refresh();
+    try {
+      await api.deleteModel(id);
+      refresh();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete model");
+    }
   };
 
   return (

@@ -63,6 +63,13 @@ export function TaskDetail() {
         </div>
       )}
 
+      {task.error && (
+        <div className="mx-4 mt-4 px-4 py-3 bg-accent-red/10 border border-accent-red/30 rounded-lg">
+          <span className="text-accent-red font-bold">{"\u{26A0}\u{FE0F}"} Error: </span>
+          <span className="text-accent-red text-sm">{task.error}</span>
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto p-4">
         <StreamTree />
       </div>

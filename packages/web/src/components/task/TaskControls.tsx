@@ -29,6 +29,11 @@ export function TaskControls({ task, onRefresh }: { task: any; onRefresh: () => 
           <button onClick={() => handleAction("stopTask")} className="px-3 py-1.5 bg-accent-red text-bg-primary rounded text-sm font-medium">⏹ Stop</button>
         </>
       )}
+      {(task.status === "failed" || task.status === "stopped") && (
+        <button onClick={() => handleAction("retryTask")} className="px-3 py-1.5 bg-accent-orange text-bg-primary rounded text-sm font-medium">
+          🔄 Retry
+        </button>
+      )}
     </div>
   );
 }

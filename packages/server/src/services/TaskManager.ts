@@ -61,11 +61,20 @@ export class TaskManager extends EventEmitter {
       throw new Error(`Task ${taskId} cannot be started from status '${task.status}'`);
     }
 
-    const modelConfig = await this.configStore.getModelWithKey(
-      task.modelConfigId!,
-    );
-    if (!modelConfig)
-      throw new Error(`Model config ${task.modelConfigId} not found`);
+    // Resolve model: use task's configured model, or fall back to first available
+    let modelConfig = task.modelConfigId
+      ? await this.configStore.getModelWithKey(task.modelConfigId)
+      : null;
+    if (!modelConfig) {
+      const allModels = await this.configStore.listModels();
+      if (allModels.length === 0)
+        throw new Error("No model configured. Please add a model config first.");
+      modelConfig = await this.configStore.getModelWithKey(allModels[0].id);
+      if (!modelConfig)
+        throw new Error("Could not load any model config");
+      // Persist the resolved model on the task so it's consistent on resume
+      await db.update(tasks).set({ modelConfigId: allModels[0].id }).where(eq(tasks.id, taskId));
+    }
 
     await db
       .update(tasks)
@@ -124,6 +133,38 @@ export class TaskManager extends EventEmitter {
     if (!task || task.status !== "paused")
       throw new Error(`Task ${taskId} is not paused`);
 
+    await this.start(taskId);
+  }
+
+  /**
+   * Retry a failed/stopped task — resets to created state and starts again.
+   */
+  async retry(taskId: string): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+    if (task.status !== "failed" && task.status !== "stopped" && task.status !== "completed") {
+      throw new Error(`Task ${taskId} cannot be retried from status '${task.status}'`);
+    }
+
+    // Reset task to created state, clear previous run data
+    await db
+      .update(tasks)
+      .set({
+        status: "created",
+        flag: null,
+        flagAccepted: null,
+        error: null,
+        startedAt: null,
+        completedAt: null,
+        elapsedMs: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(tasks.id, taskId));
+
+    // Clear old stream events for a fresh start
+    await db.delete(streamEvents).where(eq(streamEvents.taskId, taskId));
+
+    // Auto-start
     await this.start(taskId);
   }
 
@@ -195,20 +236,34 @@ export class TaskManager extends EventEmitter {
     signal: AbortSignal,
   ): Promise<void> {
     try {
-      // Ensure container is running
+      // Ensure container is running (fall back to local if Docker unavailable)
+      let useContainer = false;
       if (this.containerManager) {
-        const status = await this.containerManager.getStatus();
-        if (!status.running) {
+        try {
+          const status = await this.containerManager.getStatus();
+          if (!status.running) {
+            this.emitStreamEvent(taskId, {
+              id: `container-${Date.now()}`,
+              parentId: null,
+              type: "agent-think",
+              timestamp: Date.now(),
+              data: { content: "Starting CTF tools container..." },
+              status: "complete",
+              depth: 1,
+            });
+            await this.containerManager.start();
+          }
+          useContainer = true;
+        } catch (err: any) {
           this.emitStreamEvent(taskId, {
-            id: `container-${Date.now()}`,
+            id: `container-fallback-${Date.now()}`,
             parentId: null,
             type: "agent-think",
             timestamp: Date.now(),
-            data: { content: "Starting CTF tools container..." },
+            data: { content: `Docker unavailable (${err.code ?? err.message}), using local execution` },
             status: "complete",
             depth: 1,
           });
-          await this.containerManager.start();
         }
       }
 
@@ -222,8 +277,8 @@ export class TaskManager extends EventEmitter {
         ? JSON.parse(task.attachmentsJson)
         : undefined;
 
-      // Download attachments to container workspace if they exist
-      if (attachments && attachments.length > 0 && this.containerManager) {
+      // Download attachments to container workspace if Docker is available
+      if (attachments && attachments.length > 0 && useContainer && this.containerManager) {
         for (const url of attachments) {
           try {
             const filename = url.split("/").pop() ?? "attachment";
@@ -242,7 +297,7 @@ export class TaskManager extends EventEmitter {
         category: task.category,
         skills,
         attachments,
-        containerManager: this.containerManager,
+        containerManager: useContainer ? this.containerManager : undefined,
         rabbitHole,
         abortSignal: signal,
         onStreamEvent: (event) => this.emitStreamEvent(taskId, event),

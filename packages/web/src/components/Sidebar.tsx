@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 
 const nav = [
+  { path: "/chat", label: "Chat", icon: "💬" },
   { path: "/", label: "Tasks", icon: "📋" },
   { path: "/tasks/new", label: "New Task", icon: "➕" },
   { path: "/writeups", label: "Writeups", icon: "📄" },

@@ -8,6 +8,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       ...options,
     });
   } catch (err: any) {
+    if (err.name === "AbortError") {
+      throw new Error("Request cancelled");
+    }
     if (err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError")) {
       throw new Error(`Cannot connect to server. Make sure the API server is running on port 4000.`);
     }
@@ -29,6 +32,7 @@ export const api = {
   pauseTask: (id: string) => request<{ ok: boolean }>(`/tasks/${id}/pause`, { method: "POST" }),
   resumeTask: (id: string) => request<{ ok: boolean }>(`/tasks/${id}/resume`, { method: "POST" }),
   stopTask: (id: string) => request<{ ok: boolean }>(`/tasks/${id}/stop`, { method: "POST" }),
+  retryTask: (id: string) => request<{ ok: boolean }>(`/tasks/${id}/retry`, { method: "POST" }),
   listModels: () => request<any[]>("/config/models"),
   createModel: (config: any) => request<any>("/config/models", { method: "POST", body: JSON.stringify(config) }),
   updateModel: (id: string, config: any) => request<any>(`/config/models/${id}`, { method: "PUT", body: JSON.stringify(config) }),
@@ -58,6 +62,17 @@ export const api = {
   startContainer: () => request<{ ok: boolean }>("/config/container/start", { method: "POST" }),
   stopContainer: () => request<{ ok: boolean }>("/config/container/stop", { method: "POST" }),
   executeInContainer: (command: string, options?: any) => request<any>("/config/container/execute", { method: "POST", body: JSON.stringify({ command, options }) }),
+
+  // Chat
+  listChatSessions: () => request<any[]>("/chat/sessions"),
+  createChatSession: (modelConfigId?: string) => request<any>("/chat/sessions", { method: "POST", body: JSON.stringify({ modelConfigId }) }),
+  deleteChatSession: (id: string) => request<{ ok: boolean }>(`/chat/sessions/${id}`, { method: "DELETE" }),
+  getChatMessages: (sessionId: string) => request<any[]>(`/chat/sessions/${sessionId}/messages`),
+  sendChatMessage: (sessionId: string, content: string, modelConfigId?: string, signal?: AbortSignal) =>
+    request<{ userMessage: any; assistantMessage: any; taskCreated?: { id: string; name: string } }>(
+      `/chat/sessions/${sessionId}/messages`,
+      { method: "POST", body: JSON.stringify({ content, modelConfigId }), signal }
+    ),
 
   // Writeups
   listWriteups: () => request<any[]>("/writeups"),

@@ -62,5 +62,14 @@ export function createTaskRoutes(taskManager: TaskManager): Router {
     }
   });
 
+  router.post("/:id/retry", async (req, res) => {
+    try {
+      await taskManager.retry(req.params.id);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   return router;
 }

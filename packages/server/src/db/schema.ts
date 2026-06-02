@@ -101,6 +101,22 @@ export const mcpConfigs = sqliteTable("mcp_configs", {
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
 
+export const chatSessions = sqliteTable("chat_sessions", {
+  id: text("id").primaryKey(),
+  modelConfigId: text("model_config_id"),
+  title: text("title").default("New Chat"),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const chatMessages = sqliteTable("chat_messages", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull().references(() => chatSessions.id, { onDelete: "cascade" }),
+  role: text("role").notNull(), // "user" | "assistant" | "system"
+  content: text("content").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
 export const apiConnectorConfigs = sqliteTable("api_connector_configs", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

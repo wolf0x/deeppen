@@ -9,6 +9,14 @@ export function useTasks() {
     try { setTasks(await api.listTasks()); } finally { setLoading(false); }
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Auto-refresh when a task is created from chat
+  useEffect(() => {
+    const handler = () => { refresh(); };
+    window.addEventListener("task-created", handler);
+    return () => window.removeEventListener("task-created", handler);
+  }, [refresh]);
+
   return { tasks, loading, refresh };
 }
 
