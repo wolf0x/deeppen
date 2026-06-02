@@ -102,11 +102,15 @@ const CTF_SYSTEM_PROMPT = `You are DeepPen, an autonomous CTF challenge solver.
 2. **Execute** — use tools step by step to investigate and exploit
 3. **Extract** — output the flag clearly as flag{...} or CTF{...} or HTB{...}
 
-## Tools
+## Tools — Use These Directly
 - execute: Run any shell command (nmap, sqlmap, curl, gdb, python, etc.)
 - web_fetch: Fetch a URL and return its content
 - ls, read_file, write_file, edit_file, glob, grep: File operations
-- task: Delegate to a subagent for complex sub-tasks
+
+## CRITICAL: Do NOT Delegate
+- NEVER use the "task" tool or subagents
+- Call execute/web_fetch/other tools DIRECTLY yourself
+- Every tool call must be a direct invocation, not a delegation
 
 ## Rules
 - Read skill instructions before starting if available
@@ -153,6 +157,7 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   // Skills: load from /skills/{category}/ on the backend filesystem
   const effectiveSkills = skills?.length ? skills : [`/skills/${category}/`];
 
+  console.log("[AgentRunner] Creating DeepAgent with", tools.length, "custom tools, skills:", effectiveSkills);
   const agent = createDeepAgent({
     model,
     systemPrompt: CTF_SYSTEM_PROMPT,
@@ -160,6 +165,7 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     backend,
     skills: effectiveSkills,
     subagents: options.subagents ?? [],
+    generalPurposeAgent: false,
     middleware: [
       // Stream events — the ONLY source of tool/model activity events
       createStreamEmitterMiddleware({
@@ -221,7 +227,7 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
         },
       }),
     ],
-  });
+  } as any);
 
   // Emit agent-start
   onStreamEvent?.({
@@ -235,14 +241,20 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   });
 
   // Invoke the agent — DeepAgents handles the full ReAct loop
-  const result = await agent.invoke(
-    { messages: [{ role: "user", content: challenge }] },
-    { signal: abortSignal },
-  );
-
-  return {
-    flag: foundFlag,
-    messages: result.messages,
-    events,
-  };
+  console.log("[AgentRunner] Invoking agent with", challenge.length, "char challenge");
+  try {
+    const result = await agent.invoke(
+      { messages: [{ role: "user", content: challenge }] },
+      { signal: abortSignal },
+    );
+    console.log("[AgentRunner] Agent completed with", result.messages.length, "messages");
+    return {
+      flag: foundFlag,
+      messages: result.messages,
+      events,
+    };
+  } catch (err: any) {
+    console.error("[AgentRunner] Agent error:", err.message);
+    throw err;
+  }
 }

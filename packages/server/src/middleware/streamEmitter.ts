@@ -1,4 +1,5 @@
 import { createMiddleware } from "langchain";
+import { v4 as uuid } from "uuid";
 import type { StreamEvent } from "@deeppen/shared";
 import { extractFlags } from "./ctfFlagExtractor.js";
 
@@ -19,7 +20,6 @@ export interface StreamEmitterOptions {
  */
 export function createStreamEmitterMiddleware(options: StreamEmitterOptions): any {
   const { onStreamEvent, onFlagFound } = options;
-  let callCounter = 0;
 
   const emit = (event: StreamEvent) => {
     try { onStreamEvent?.(event); } catch { /* swallow */ }
@@ -32,11 +32,10 @@ export function createStreamEmitterMiddleware(options: StreamEmitterOptions): an
     wrapModelCall: async (request: any, handler: any) => {
       const response = await handler(request);
 
-      // Extract text from response
       const text = extractText(response);
       if (text.trim()) {
         emit({
-          id: `resp-${++callCounter}`,
+          id: uuid(),
           parentId: null,
           type: "agent-response",
           timestamp: Date.now(),
@@ -45,10 +44,9 @@ export function createStreamEmitterMiddleware(options: StreamEmitterOptions): an
           depth: 1,
         });
 
-        // Scan for flags in model output
         for (const flag of extractFlags(text)) {
           emit({
-            id: `flag-resp-${callCounter}-${Date.now()}`,
+            id: uuid(),
             parentId: null,
             type: "flag-found",
             timestamp: Date.now(),
@@ -66,18 +64,14 @@ export function createStreamEmitterMiddleware(options: StreamEmitterOptions): an
     // Fires for each tool execution
     wrapToolCall: async (request: any, handler: any) => {
       const { toolCall } = request;
-      const callId = `tc-${++callCounter}`;
+      const callId = uuid();
 
-      // Emit tool-call BEFORE execution
       emit({
         id: callId,
         parentId: null,
         type: "tool-call",
         timestamp: Date.now(),
-        data: {
-          toolName: toolCall.name,
-          toolInput: toolCall.args,
-        },
+        data: { toolName: toolCall.name, toolInput: toolCall.args },
         status: "running",
         depth: 2,
       });
@@ -86,25 +80,20 @@ export function createStreamEmitterMiddleware(options: StreamEmitterOptions): an
         const result = await handler(request);
         const output = extractToolOutput(result);
 
-        // Emit tool-result AFTER execution
         emit({
-          id: `tr-${callCounter}`,
+          id: uuid(),
           parentId: callId,
           type: "tool-result",
           timestamp: Date.now(),
-          data: {
-            toolName: toolCall.name,
-            toolOutput: output.slice(0, 1000),
-          },
+          data: { toolName: toolCall.name, toolOutput: output.slice(0, 1000) },
           status: "complete",
           depth: 3,
         });
 
-        // Scan tool output for flags
         for (const flag of extractFlags(output)) {
           emit({
-            id: `flag-t-${callCounter}-${Date.now()}`,
-            parentId: `tr-${callCounter}`,
+            id: uuid(),
+            parentId: callId,
             type: "flag-found",
             timestamp: Date.now(),
             data: { flag },
@@ -116,17 +105,12 @@ export function createStreamEmitterMiddleware(options: StreamEmitterOptions): an
 
         return result;
       } catch (err: any) {
-        // Emit tool error
         emit({
-          id: `tr-${callCounter}`,
+          id: uuid(),
           parentId: callId,
           type: "tool-result",
           timestamp: Date.now(),
-          data: {
-            toolName: toolCall.name,
-            toolOutput: `Error: ${err.message}`,
-            error: err.message,
-          },
+          data: { toolName: toolCall.name, toolOutput: `Error: ${err.message}`, error: err.message },
           status: "error",
           depth: 3,
         });
