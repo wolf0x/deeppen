@@ -17,23 +17,28 @@ export function TaskCard({ task }: { task: any }) {
   return (
     <Link
       to={`/tasks/${task.id}`}
-      className="block bg-bg-surface border border-border rounded-lg p-4 hover:border-accent-blue transition-colors"
+      className="flex items-center gap-4 bg-bg-surface border border-border rounded-lg px-4 py-3 hover:border-accent-blue transition-colors"
     >
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span>{categoryIcons[task.category] ?? "📦"}</span>
-          <h3 className="font-semibold text-text-primary">{task.name}</h3>
-        </div>
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[task.status] ?? statusColors.created}`}>
-          {task.status}
-        </span>
+      {/* Category icon */}
+      <span className="text-lg flex-shrink-0">{categoryIcons[task.category] ?? "📦"}</span>
+
+      {/* Name + description */}
+      <div className="flex-1 min-w-0">
+        <h3 className="font-semibold text-text-primary text-sm truncate">{task.name}</h3>
+        <p className="text-xs text-text-secondary truncate mt-0.5">{task.challengeDescription}</p>
       </div>
-      <p className="text-sm text-text-secondary truncate">{task.challengeDescription}</p>
+
+      {/* Flag if found */}
       {task.flag && (
-        <div className="mt-2 px-2 py-1 bg-accent-green/10 rounded text-xs text-accent-green">
+        <span className="flex-shrink-0 bg-accent-green/10 text-accent-green px-2 py-0.5 rounded text-xs font-mono truncate max-w-[200px]">
           🚩 {task.flag}
-        </div>
+        </span>
       )}
+
+      {/* Status badge */}
+      <span className={`flex-shrink-0 px-2 py-0.5 rounded text-xs font-medium ${statusColors[task.status] ?? statusColors.created}`}>
+        {task.status}
+      </span>
     </Link>
   );
 }
