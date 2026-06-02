@@ -87,15 +87,23 @@ export function createToolTrackerMiddleware(options: ToolTrackerOptions): any {
       try {
         const result = await handler(request);
 
-        // Extract output text
-        const output =
-          typeof result === "string"
-            ? result
-            : result?.content
-              ? typeof result.content === "string"
-                ? result.content
-                : JSON.stringify(result.content)
-              : JSON.stringify(result);
+        // Extract output text — handle string, ExecuteResponse {output}, AIMessage {content}, or raw
+        let output: string;
+        if (typeof result === "string") {
+          output = result;
+        } else if (typeof result?.output === "string") {
+          // ExecuteResponse from BaseSandbox.execute()
+          output = result.output;
+        } else if (typeof result?.content === "string") {
+          output = result.content;
+        } else if (Array.isArray(result?.content)) {
+          output = result.content
+            .filter((b: any) => b.type === "text")
+            .map((b: any) => b.text)
+            .join("");
+        } else {
+          output = JSON.stringify(result);
+        }
 
         // Emit tool-result event
         onStreamEvent?.({

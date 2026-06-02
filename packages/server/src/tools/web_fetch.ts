@@ -8,10 +8,14 @@ import { z } from "zod";
 export function createWebFetchTool() {
   return tool(
     async (input: { url: string; extract_text?: boolean }): Promise<string> => {
-      const { url, extract_text = true } = input;
+      let { url, extract_text = true } = input;
 
       try {
-        // Validate URL
+        // Auto-prepend https:// if no protocol given
+        if (!url.match(/^https?:\/\//)) {
+          url = "https://" + url;
+        }
+
         const parsed = new URL(url);
         if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
           return "Error: Only HTTP and HTTPS URLs are supported";
@@ -22,6 +26,7 @@ export function createWebFetchTool() {
             "User-Agent": "DeepPen/1.0 (CTF Challenge Solver)",
           },
           signal: AbortSignal.timeout(30000),
+          redirect: "follow",
         });
 
         if (!response.ok) {
@@ -32,12 +37,11 @@ export function createWebFetchTool() {
         const text = await response.text();
 
         if (!extract_text) {
-          return text.slice(0, 50000); // Limit to 50KB
+          return text.slice(0, 50000);
         }
 
         // For HTML, do basic text extraction
         if (contentType.includes("text/html")) {
-          // Strip HTML tags, scripts, styles
           let cleaned = text
             .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
             .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -52,18 +56,20 @@ export function createWebFetchTool() {
           return cleaned.slice(0, 50000);
         }
 
-        // For other text content, return as-is
         return text.slice(0, 50000);
       } catch (err: any) {
-        return `Error fetching URL: ${err.message}`;
+        if (err.name === "TimeoutError" || err.name === "AbortError") {
+          return `Error: Request timed out after 30s fetching ${url}`;
+        }
+        return `Error fetching ${url}: ${err.message}`;
       }
     },
     {
       name: "web_fetch",
       description:
-        "Fetch a URL and return its content. Use this to retrieve web pages, API responses, or any HTTP resource. Supports HTML (auto-extracts text), JSON, plain text, and other formats. Maximum response size is 50KB.",
+        "Fetch a URL and return its content. Use this to retrieve web pages, API responses, or any HTTP resource. URLs without a protocol (e.g. 'example.com') are treated as HTTPS. Supports HTML (auto-extracts text), JSON, plain text. Max 50KB.",
       schema: z.object({
-        url: z.string().url().describe("The URL to fetch"),
+        url: z.string().describe("The URL to fetch (e.g. 'https://example.com' or 'example.com')"),
         extract_text: z
           .boolean()
           .default(true)
