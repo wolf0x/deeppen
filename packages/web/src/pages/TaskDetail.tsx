@@ -37,6 +37,7 @@ export function TaskDetail() {
               <span className={`flex-shrink-0 text-xs font-medium px-2 py-0.5 rounded ${
                 task.status === "running" ? "bg-accent-green/20 text-accent-green" :
                 task.status === "completed" ? "bg-accent-green/20 text-accent-green" :
+                task.status === "stopped" || task.status === "failed" ? "bg-accent-red/20 text-accent-red" :
                 "bg-bg-elevated text-text-secondary"
               }`}>
                 {task.status.toUpperCase()}

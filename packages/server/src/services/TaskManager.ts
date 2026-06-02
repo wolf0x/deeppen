@@ -346,7 +346,7 @@ export class TaskManager extends EventEmitter {
     await db
       .update(tasks)
       .set({
-        status: "failed",
+        status: "stopped",
         error: err.message,
         completedAt: new Date(),
         updatedAt: new Date(),
