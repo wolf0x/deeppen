@@ -113,7 +113,7 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
 
         {/* Flag badge */}
         {event.type === "flag-found" && data.flag && (
-          <span className="bg-accent-green/20 text-accent-green px-2 py-0.5 rounded text-xs font-bold">{data.flag}</span>
+          <span className="bg-accent-green/20 text-accent-green px-2 py-0.5 rounded text-sm font-bold font-mono select-all">🚩 {data.flag}</span>
         )}
       </div>
 

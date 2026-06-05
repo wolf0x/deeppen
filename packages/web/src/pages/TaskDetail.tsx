@@ -72,9 +72,12 @@ export function TaskDetail() {
       {/* Scrollable content */}
       <div className="flex-1 overflow-auto p-4 space-y-3">
         {task.flag && (
-          <div className="px-4 py-3 bg-accent-green/10 border border-accent-green/30 rounded-lg">
-            <span className="text-accent-green font-bold">{"\u{1F6A9}"} FLAG: </span>
-            <span className="text-accent-green font-mono">{task.flag}</span>
+          <div className="px-5 py-4 bg-accent-green/15 border-2 border-accent-green/40 rounded-lg">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-accent-green text-lg">{"\u{1F6A9}"}</span>
+              <span className="text-accent-green font-bold text-sm uppercase tracking-wide">Flag Found</span>
+            </div>
+            <p className="text-accent-green font-mono text-lg break-all select-all">{task.flag}</p>
           </div>
         )}
 
