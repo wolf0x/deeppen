@@ -69,182 +69,93 @@ export class WriteupGenerator {
     const flag = task.flag ?? "Not found";
     const elapsed = task.elapsedMs ? this.formatTime(task.elapsedMs) : "N/A";
 
-    // Parse all events
+    // Parse events
     const parsed = events.map((e) => ({
       type: e.type,
       data: e.dataJson ? JSON.parse(e.dataJson) : {},
-      timestamp: e.timestamp,
     }));
 
-    // Extract agent responses (the model's reasoning and findings)
-    const responses = parsed.filter((e) => e.type === "agent-response");
+    // Extract agent responses — the solver's reasoning and findings
+    const responses = parsed
+      .filter((e) => e.type === "agent-response")
+      .map((e) => e.data.content ?? "")
+      .filter((t) => t.trim().length > 0);
 
-    // Extract tool calls and results as pairs
-    const toolPairs = this.pairToolCalls(parsed);
+    // Extract tool result outputs — the actual data discovered
+    const toolOutputs = parsed
+      .filter((e) => e.type === "tool-result" && e.data.toolOutput)
+      .map((e) => e.data.toolOutput as string);
 
-    // Extract key findings from tool results
-    const findings = this.extractFindings(toolPairs);
-
-    // Build writeup
     let md = "";
 
-    // Header
+    // Title
     md += `# ${task.name}\n\n`;
-    md += `| Field | Value |\n|-------|-------|\n`;
-    md += `| Category | ${task.category} |\n`;
-    md += `| Platform | ${task.platform || "N/A"} |\n`;
-    md += `| Status | ${task.status} |\n`;
-    md += `| Time | ${elapsed} |\n`;
-    md += `| Flag | \`${flag}\` |\n\n`;
+
+    // Challenge info
+    md += `## 题目信息\n\n`;
+    md += `- **分类:** ${task.category}\n`;
+    md += `- **平台:** ${task.platform || "N/A"}\n`;
+    md += `- **用时:** ${elapsed}\n\n`;
 
     // Challenge description
-    md += `## Challenge\n\n`;
+    md += `## 题目描述\n\n`;
     md += `${task.challengeDescription}\n\n`;
 
-    // Approach — from agent responses
+    // Solution approach — what the solver was thinking
+    md += `## 解题思路\n\n`;
     if (responses.length > 0) {
-      md += `## Approach\n\n`;
-      for (const r of responses) {
-        const text = r.data.content ?? "";
-        if (text.trim()) {
-          md += `${text.trim()}\n\n`;
-        }
+      for (const text of responses) {
+        md += `${text.trim()}\n\n`;
       }
+    } else {
+      md += `(No solving steps recorded)\n\n`;
     }
 
-    // Key findings — extracted from tool outputs
-    if (findings.length > 0) {
-      md += `## Key Findings\n\n`;
-      for (const f of findings) {
-        md += `### ${f.title}\n\n`;
-        md += `\`\`\`\n${f.content}\n\`\`\`\n\n`;
-      }
-    }
-
-    // Reconnaissance summary
-    const reconTools = toolPairs.filter((p) =>
-      ["web_fetch", "execute", "curl"].includes(p.name)
-    );
-    if (reconTools.length > 0) {
-      md += `## Reconnaissance\n\n`;
-      for (const t of reconTools.slice(0, 15)) {
-        const input = this.formatToolInput(t.name, t.input);
-        const output = t.output ? t.output.slice(0, 300) : "(no output)";
-        md += `**${t.name}** \`${input}\`\n`;
+    // Key data discovered — actual content found during solving
+    const interestingOutputs = this.extractInterestingOutputs(toolOutputs);
+    if (interestingOutputs.length > 0) {
+      md += `## 关键发现\n\n`;
+      for (const output of interestingOutputs) {
         md += `\`\`\`\n${output}\n\`\`\`\n\n`;
       }
     }
 
-    // Tools used summary
-    const toolCounts: Record<string, number> = {};
-    for (const p of toolPairs) {
-      toolCounts[p.name] = (toolCounts[p.name] ?? 0) + 1;
-    }
-    if (Object.keys(toolCounts).length > 0) {
-      md += `## Tools Used\n\n`;
-      md += `| Tool | Calls |\n|------|-------|\n`;
-      for (const [name, count] of Object.entries(toolCounts)) {
-        md += `| ${name} | ${count} |\n`;
-      }
-      md += `\n`;
-    }
-
     // Result
-    md += `## Result\n\n`;
+    md += `## 结果\n\n`;
     if (task.status === "completed" && flag !== "Not found") {
-      md += `Challenge solved successfully. Flag: \`${flag}\`\n`;
+      md += `**Flag:** \`${flag}\`\n`;
     } else if (task.status === "stopped" && task.error) {
-      md += `Task stopped: ${task.error}\n`;
+      md += `任务终止: ${task.error}\n`;
     } else {
-      md += `Task ended with status: ${task.status}\n`;
+      md += `任务状态: ${task.status}\n`;
     }
 
     return md;
   }
 
-  /** Pair tool-call events with their tool-result events */
-  private pairToolCalls(parsed: any[]): Array<{ name: string; input: any; output: string | null }> {
-    const pairs: Array<{ name: string; input: any; output: string | null }> = [];
-    const pending = new Map<string, any>();
-
-    for (const e of parsed) {
-      if (e.type === "tool-call") {
-        // Use a temp key since we don't have toolCall.id in the event
-        const key = `${e.data.toolName}-${e.timestamp}`;
-        pending.set(key, { name: e.data.toolName, input: e.data.toolInput });
-      } else if (e.type === "tool-result") {
-        // Find matching tool-call by name and proximity
-        const matchKey = [...pending.keys()].find((k) =>
-          k.startsWith(e.data.toolName + "-") &&
-          Math.abs(parseInt(k.split("-").pop() ?? "0") - e.timestamp) < 10000
-        );
-        if (matchKey) {
-          const call = pending.get(matchKey)!;
-          pairs.push({ name: call.name, input: call.input, output: e.data.toolOutput ?? null });
-          pending.delete(matchKey);
-        } else {
-          pairs.push({ name: e.data.toolName, input: null, output: e.data.toolOutput ?? null });
-        }
-      }
-    }
-
-    // Add unmatched calls
-    for (const [, call] of pending) {
-      pairs.push({ name: call.name, input: call.input, output: null });
-    }
-
-    return pairs;
-  }
-
-  /** Extract interesting findings from tool results */
-  private extractFindings(toolPairs: Array<{ name: string; input: any; output: string | null }>): Array<{ title: string; content: string }> {
-    const findings: Array<{ title: string; content: string }> = [];
-
-    for (const t of toolPairs) {
-      if (!t.output) continue;
-
-      // Look for interesting patterns in tool output
-      const output = t.output;
-
-      // HTTP responses with interesting content
-      if (t.name === "web_fetch" && output.length > 50) {
-        const input = this.formatToolInput(t.name, t.input);
-        findings.push({
-          title: `Web: ${input}`,
-          content: output.slice(0, 500),
-        });
-      }
-
-      // Execute commands that returned useful info
-      if (t.name === "execute" && t.input?.command) {
-        const cmd = t.input.command;
-        // Skip trivial commands
-        if (cmd.startsWith("ls") || cmd.startsWith("pwd") || cmd.startsWith("echo")) continue;
-        if (output.length > 30 && !output.includes("error") && !output.includes("not found")) {
-          findings.push({
-            title: `Command: ${cmd.slice(0, 60)}`,
-            content: output.slice(0, 500),
-          });
-        }
-      }
-    }
-
-    // Deduplicate by title
+  /** Extract interesting outputs — skip trivial ones */
+  private extractInterestingOutputs(outputs: string[]): string[] {
     const seen = new Set<string>();
-    return findings.filter((f) => {
-      if (seen.has(f.title)) return false;
-      seen.add(f.title);
-      return true;
-    }).slice(0, 10);
-  }
+    const results: string[] = [];
 
-  private formatToolInput(name: string, input: any): string {
-    if (!input) return "";
-    if (typeof input === "string") return input.slice(0, 80);
-    if (input.url) return input.url;
-    if (input.command) return input.command.slice(0, 80);
-    if (input.path) return input.path;
-    return JSON.stringify(input).slice(0, 80);
+    for (const output of outputs) {
+      const trimmed = output.trim();
+      if (trimmed.length < 20) continue;
+
+      // Skip trivial outputs
+      if (trimmed.startsWith("total ") && trimmed.includes("drwx")) continue; // ls output
+      if (trimmed.match(/^(ok|done|success|yes|no)$/i)) continue;
+      if (trimmed.includes("Command succeeded with exit code 0") && trimmed.length < 50) continue;
+
+      // Deduplicate
+      const key = trimmed.slice(0, 100);
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      results.push(trimmed.slice(0, 800));
+    }
+
+    return results.slice(0, 10);
   }
 
   private formatTime(ms: number): string {
@@ -252,10 +163,10 @@ export class WriteupGenerator {
     if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    if (minutes < 60) return `${minutes}m ${secs}s`;
+    if (minutes < 60) return `${minutes}分${secs}秒`;
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+    return `${hours}小时${mins}分`;
   }
 
   private rowToWriteup(row: any): Writeup {
