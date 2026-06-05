@@ -18,7 +18,7 @@ const typeConfig: Record<string, { icon: string; color: string; label: string }>
   "task-error": { icon: "❌", color: "text-accent-red", label: "Error" },
 };
 
-// Types that can expand to show full content
+// Types that can expand to show full content inline
 const EXPANDABLE_TYPES = new Set(["tool-call", "tool-result", "agent-response", "agent-think"]);
 
 export function TreeNode({ event, children, defaultExpanded = true }: {
@@ -68,12 +68,11 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
     fullContent = data.content ?? "";
     preview = fullContent.length > 120 ? fullContent.slice(0, 120) + "…" : fullContent;
   } else {
-    // agent-think, flag-found, etc.
     fullContent = data.content ?? data.flag ?? data.error ?? "";
     preview = fullContent.length > 120 ? fullContent.slice(0, 120) + "…" : fullContent;
   }
 
-  const hasLongContent = fullContent.length > 120;
+  const hasExpandableContent = fullContent.length > 0;
 
   return (
     <div>
@@ -81,31 +80,27 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
       <div
         className={`flex items-center gap-2 py-0.5 hover:bg-bg-elevated rounded px-1 ${canExpand ? "cursor-pointer" : "cursor-default"}`}
         style={{ paddingLeft: `${event.depth * 20}px` }}
-        onClick={() => canExpand && setExpanded(!expanded)}
+        onClick={() => { if (canExpand) setExpanded(prev => !prev); }}
       >
         {/* Expand/collapse toggle */}
-        {canExpand ? (
-          <button className="w-4 text-text-secondary text-xs" onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}>
-            {expanded ? "▼" : "▶"}
-          </button>
-        ) : (
-          <span className="w-4" />
-        )}
+        <span className="w-4 text-text-secondary text-xs flex-shrink-0">
+          {canExpand ? (expanded ? "▼" : "▶") : ""}
+        </span>
 
         <span className={config.color}>{config.icon}</span>
-        <span className={`${config.color} text-xs font-medium`}>{config.label}</span>
+        <span className={`${config.color} text-xs font-medium flex-shrink-0`}>{config.label}</span>
 
         {/* Tool name badge */}
         {event.type === "tool-call" && data.toolName && (
-          <span className="bg-accent-blue/20 text-accent-blue px-1.5 py-0.5 rounded text-xs font-mono">
+          <span className="bg-accent-blue/20 text-accent-blue px-1.5 py-0.5 rounded text-xs font-mono flex-shrink-0">
             {data.toolName}
           </span>
         )}
 
         {/* Running indicator */}
-        {event.status === "running" && <span className="w-2 h-2 bg-accent-blue rounded-full animate-pulse" />}
+        {event.status === "running" && <span className="w-2 h-2 bg-accent-blue rounded-full animate-pulse flex-shrink-0" />}
 
-        {/* Inline preview (truncated) */}
+        {/* Inline preview (truncated, only when collapsed) */}
         {!expanded && preview && (
           <span className={`text-xs truncate max-w-lg ${
             event.type === "tool-result" ? "text-text-secondary font-mono" :
@@ -116,31 +111,22 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
           </span>
         )}
 
-        {/* Expand hint */}
-        {!expanded && hasLongContent && (
-          <span className="text-text-secondary/40 text-xs">click to expand</span>
-        )}
-
         {/* Flag badge */}
         {event.type === "flag-found" && data.flag && (
           <span className="bg-accent-green/20 text-accent-green px-2 py-0.5 rounded text-xs font-bold">{data.flag}</span>
         )}
       </div>
 
-      {/* Expanded content */}
-      {expanded && !hasChildren && fullContent && (
-        <div className="ml-10 my-1">
-          <pre className={`text-xs p-2 rounded border border-border overflow-auto max-h-[600px] whitespace-pre-wrap break-words ${
-            event.type === "tool-result" ? "bg-bg-elevated text-text-secondary font-mono" :
-            event.type === "tool-call" ? "bg-bg-elevated text-text-secondary font-mono" :
-            "text-text-secondary"
-          }`}>
+      {/* Expanded content block */}
+      {expanded && hasExpandableContent && (
+        <div className="ml-8 my-1">
+          <pre className="text-xs p-2 rounded bg-bg-elevated border border-border overflow-auto max-h-[600px] whitespace-pre-wrap break-words font-mono text-text-secondary">
             {fullContent}
           </pre>
         </div>
       )}
 
-      {/* Children (sub-nodes) */}
+      {/* Children (sub-nodes from parent-child relationships) */}
       {expanded && hasChildren && <div className="border-l border-border ml-4">{children}</div>}
     </div>
   );
