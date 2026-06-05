@@ -22,7 +22,9 @@ export function createStreamEmitterMiddleware(options: StreamEmitterOptions): an
   const { onStreamEvent, onFlagFound } = options;
 
   const emit = (event: StreamEvent) => {
-    try { onStreamEvent?.(event); } catch { /* swallow */ }
+    try { onStreamEvent?.(event); } catch (err: any) {
+      console.error("[StreamEmitter] Failed to emit event:", event.type, err.message);
+    }
   };
 
   return createMiddleware({

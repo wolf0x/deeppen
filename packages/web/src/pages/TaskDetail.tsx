@@ -1,4 +1,5 @@
 import { useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useTask } from "../hooks/useTasks.js";
 import { useSSE } from "../hooks/useSSE.js";
 import { StreamTree } from "../components/task/StreamTree.js";
@@ -9,6 +10,14 @@ export function TaskDetail() {
   const { id } = useParams<{ id: string }>();
   const { task, loading, refresh } = useTask(id!);
   useSSE(id);
+  const [now, setNow] = useState(Date.now());
+
+  // Tick elapsed timer every second while task is running
+  useEffect(() => {
+    if (task?.status !== "running") return;
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, [task?.status]);
 
   const handleGenerateWriteup = async () => {
     try {
@@ -23,7 +32,7 @@ export function TaskDetail() {
   if (!task) return <div className="p-6 text-accent-red">Task not found</div>;
 
   const elapsed = task.startedAt
-    ? Math.round((Date.now() - new Date(task.startedAt).getTime()) / 1000)
+    ? Math.round((now - new Date(task.startedAt).getTime()) / 1000)
     : 0;
 
   return (

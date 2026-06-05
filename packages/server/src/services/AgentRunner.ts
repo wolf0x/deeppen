@@ -7,7 +7,6 @@ import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createStreamEmitterMiddleware } from "../middleware/streamEmitter.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
-import { createFlagExtractorMiddleware } from "../middleware/ctfFlagExtractor.js";
 import { DockerBackend } from "../backends/docker.js";
 import { LocalBackend } from "../backends/local.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
@@ -206,24 +205,6 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
           };
           events.push(event);
           onStreamEvent?.(event);
-        },
-      }),
-      // Flag extraction — scans model responses for flag patterns
-      createFlagExtractorMiddleware({
-        onFlagFound: (flag) => {
-          foundFlag = flag;
-          const event: StreamEvent = {
-            id: `flag-${Date.now()}`,
-            parentId: null,
-            type: "flag-found",
-            timestamp: Date.now(),
-            data: { flag },
-            status: "complete",
-            depth: 0,
-          };
-          events.push(event);
-          onStreamEvent?.(event);
-          onFlagFound?.(flag);
         },
       }),
     ],

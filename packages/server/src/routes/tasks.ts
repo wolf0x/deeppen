@@ -6,8 +6,12 @@ export function createTaskRoutes(taskManager: TaskManager): Router {
   const router = Router();
 
   router.get("/", async (_req, res) => {
-    const taskList = await taskManager.listTasks();
-    res.json(taskList);
+    try {
+      const taskList = await taskManager.listTasks();
+      res.json(taskList);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   router.post("/", async (req, res) => {
@@ -21,9 +25,13 @@ export function createTaskRoutes(taskManager: TaskManager): Router {
   });
 
   router.get("/:id", async (req, res) => {
-    const task = await taskManager.getTask(req.params.id);
-    if (!task) return res.status(404).json({ error: "Not found" });
-    res.json(task);
+    try {
+      const task = await taskManager.getTask(req.params.id);
+      if (!task) return res.status(404).json({ error: "Not found" });
+      res.json(task);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   router.post("/:id/start", async (req, res) => {

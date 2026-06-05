@@ -1,8 +1,7 @@
 import { Router } from "express";
 import { ChatService } from "../services/ChatService.js";
-import { StreamBridge } from "../services/StreamBridge.js";
 
-export function createChatRoutes(chatService: ChatService, streamBridge: StreamBridge): Router {
+export function createChatRoutes(chatService: ChatService): Router {
   const router = Router();
 
   // ─── Sessions ──────────────────────────────────────
@@ -52,10 +51,11 @@ export function createChatRoutes(chatService: ChatService, streamBridge: StreamB
 
       const result = await chatService.sendMessage(req.params.id, content, modelConfigId);
 
-      // If the LLM produced a task creation, create it
+      // If the LLM produced a task creation, create it with the session's model
       let taskCreated = result.taskCreated;
       if (taskCreated) {
-        const taskId = await chatService.createTaskFromChat(taskCreated as any);
+        const session = await chatService.getSession(req.params.id);
+        const taskId = await chatService.createTaskFromChat(taskCreated as any, session?.modelConfigId ?? undefined);
         taskCreated = { ...taskCreated, id: taskId };
       }
 
@@ -67,22 +67,6 @@ export function createChatRoutes(chatService: ChatService, streamBridge: StreamB
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }
-  });
-
-  // ─── SSE Stream (for future real-time streaming) ──
-  router.get("/sessions/:id/stream", async (req, res) => {
-    const sessionId = req.params.id;
-
-    // Set SSE headers
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    });
-    res.write(`event: connected\ndata: {"sessionId":"${sessionId}"}\n\n`);
-
-    // Use StreamBridge to manage this connection
-    streamBridge.addClient(sessionId, res);
   });
 
   return router;

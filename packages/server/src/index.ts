@@ -48,7 +48,7 @@ app.use("/api/config/connectors", createConnectorRoutes(apiConnector));
 app.use("/api/config/skills", createSkillRoutes());
 app.use("/api/config/container", createContainerRoutes(containerManager));
 app.use("/api/writeups", createWriteupRoutes(writeupGenerator));
-app.use("/api/chat", createChatRoutes(chatService, streamBridge));
+app.use("/api/chat", createChatRoutes(chatService));
 
 // Start server
 app.listen(PORT, () => {

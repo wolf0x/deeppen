@@ -213,7 +213,7 @@ export class ChatService {
   }
 
   /** Create a task from chat-extracted data. Returns the task ID. */
-  async createTaskFromChat(taskData: { name: string; description: string; category: string }): Promise<string> {
+  async createTaskFromChat(taskData: { name: string; description: string; category: string }, modelId?: string): Promise<string> {
     if (!this.taskManager) throw new Error("TaskManager not available");
     const taskId = await this.taskManager.create({
       name: taskData.name,
@@ -221,7 +221,7 @@ export class ChatService {
         description: taskData.description,
         category: taskData.category as any,
       },
-      modelId: undefined as any,
+      modelId: modelId as any,
       autoSubmit: true,
     });
     return taskId;

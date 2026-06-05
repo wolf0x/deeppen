@@ -54,10 +54,9 @@ export class TaskManager extends EventEmitter {
   async start(taskId: string): Promise<void> {
     const task = await this.getTask(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
-    if (task.status === "running")
-      throw new Error(`Task ${taskId} is already running`);
+
     // Only allow starting from created or paused state
-    if (task.status !== "created" && task.status !== "paused") {
+    if (task.status !== "created" && task.status !== "paused" && task.status !== "stopped") {
       throw new Error(`Task ${taskId} cannot be started from status '${task.status}'`);
     }
 
@@ -76,14 +75,20 @@ export class TaskManager extends EventEmitter {
       await db.update(tasks).set({ modelConfigId: allModels[0].id }).where(eq(tasks.id, taskId));
     }
 
-    await db
+    // Atomic status transition — prevents double-start race
+    const result = db
       .update(tasks)
       .set({
         status: "running",
         startedAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(tasks.id, taskId));
+      .where(eq(tasks.id, taskId))
+      .run();
+
+    if (result.changes === 0) {
+      throw new Error(`Task ${taskId} could not be started (concurrent modification)`);
+    }
 
     const abortController = new AbortController();
     this.abortControllers.set(taskId, abortController);
