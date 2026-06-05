@@ -153,8 +153,24 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   // Custom tools — DeepAgents provides execute, ls, read_file, etc. natively
   const tools = [createWebFetchTool()];
 
-  // Skills: load from /skills/{category}/ on the backend filesystem
-  const effectiveSkills = skills?.length ? skills : [`/skills/${category}/`];
+  // Skills: use container path when Docker is available, host path otherwise
+  // Container mounts skills at /skills/, host has them at projectRoot/skills/
+  const skillsRoot = containerManager ? "/skills" : (() => {
+    const { fileURLToPath } = require("node:url");
+    const { dirname, resolve } = require("node:path");
+    return resolve(dirname(fileURLToPath(import.meta.url)), "../../../../skills");
+  })();
+
+  const categorySkillMap: Record<string, string> = {
+    web: skillsRoot + "/web-security/",
+    pwn: skillsRoot + "/pwn/",
+    crypto: skillsRoot + "/bug-bounty/",
+    forensics: skillsRoot + "/bug-bounty/",
+    misc: skillsRoot + "/bug-bounty/",
+    "prompt-injection": skillsRoot + "/hunt-llm-ai/",
+  };
+  const effectiveSkills = skills?.length ? skills : [categorySkillMap[category] ?? skillsRoot + "/bug-bounty/"];
+  console.log("[AgentRunner] Skills:", effectiveSkills[0]);
 
   console.log("[AgentRunner] Creating DeepAgent with", tools.length, "custom tools, skills:", effectiveSkills);
   const agent = createDeepAgent({
