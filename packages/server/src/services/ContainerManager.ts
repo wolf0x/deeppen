@@ -22,7 +22,7 @@ function isValidContainerName(name: string): boolean {
 
 export class ContainerManager {
   private config: ContainerConfig = {
-    image: "deeppen/tools:latest", name: "deeppen-tools",
+    image: "kalilinux/kali-rolling", name: "pentest-lab",
     volumes: [], networkMode: "bridge",
     resourceLimits: { memory: "4g", cpus: 2, timeout: 60 },
     installedTools: [],
