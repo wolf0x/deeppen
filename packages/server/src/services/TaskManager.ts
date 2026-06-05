@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { v4 as uuid } from "uuid";
 import { db } from "../db/index.js";
 import { tasks, streamEvents } from "../db/index.js";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import type { TaskConfig, TaskStatus, StreamEvent } from "@deeppen/shared";
 import { runCTFAgent } from "./AgentRunner.js";
 import { ConfigStore } from "./ConfigStore.js";
@@ -211,7 +211,7 @@ export class TaskManager extends EventEmitter {
    * List all tasks.
    */
   async listTasks(): Promise<any[]> {
-    return db.select().from(tasks);
+    return db.select().from(tasks).orderBy(desc(tasks.createdAt));
   }
 
   /**
