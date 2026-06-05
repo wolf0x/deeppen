@@ -1,26 +1,36 @@
 const BASE = "/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`${BASE}${path}`, {
-      headers: { "Content-Type": "application/json" },
-      ...options,
-    });
-  } catch (err: any) {
-    if (err.name === "AbortError") {
-      throw new Error("Request cancelled");
+  const maxRetries = 3;
+  let lastErr: any;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const res = await fetch(`${BASE}${path}`, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        throw new Error(err.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      return res.json();
+    } catch (err: any) {
+      lastErr = err;
+      if (err.name === "AbortError") throw new Error("Request cancelled");
+      // Retry on connection refused (server starting up)
+      if (attempt < maxRetries - 1 && (err.message?.includes("Failed to fetch") || err.message?.includes("ECONNREFUSED"))) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      break;
     }
-    if (err.message?.includes("Failed to fetch") || err.message?.includes("NetworkError")) {
-      throw new Error(`Cannot connect to server. Make sure the API server is running on port 4000.`);
-    }
-    throw new Error(`Network error: ${err.message}`);
   }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}: ${res.statusText}`);
+
+  if (lastErr?.message?.includes("Failed to fetch") || lastErr?.message?.includes("ECONNREFUSED")) {
+    throw new Error("Cannot connect to server. Make sure the API server is running on port 4000.");
   }
-  return res.json();
+  throw new Error(`Network error: ${lastErr?.message}`);
 }
 
 export const api = {
