@@ -13,10 +13,6 @@ export interface Writeup {
 }
 
 export class WriteupGenerator {
-  /**
-   * Generate a writeup from a completed task's execution history.
-   * Uses the stream events to build a structured writeup.
-   */
   async generate(taskId: string): Promise<Writeup> {
     const taskRows = await db.select().from(tasks).where(eq(tasks.id, taskId));
     const task = taskRows[0];
@@ -25,7 +21,8 @@ export class WriteupGenerator {
     const events = await db
       .select()
       .from(streamEvents)
-      .where(eq(streamEvents.taskId, taskId));
+      .where(eq(streamEvents.taskId, taskId))
+      .orderBy(streamEvents.timestamp);
 
     const content = this.buildWriteup(task, events);
 
@@ -40,7 +37,6 @@ export class WriteupGenerator {
       updatedAt: now,
     });
 
-    // Link writeup to task
     await db.update(tasks).set({ writeupId: id, updatedAt: now }).where(eq(tasks.id, taskId));
 
     return this.get(id) as Promise<Writeup>;
@@ -71,76 +67,195 @@ export class WriteupGenerator {
 
   private buildWriteup(task: any, events: any[]): string {
     const flag = task.flag ?? "Not found";
-    const elapsed = task.elapsedMs ? `${Math.round(task.elapsedMs / 1000)}s` : "N/A";
+    const elapsed = task.elapsedMs ? this.formatTime(task.elapsedMs) : "N/A";
 
-    // Categorize events
-    const thinking = events.filter((e) => e.type === "agent-think");
-    const toolCalls = events.filter((e) => e.type === "tool-call");
-    const flagEvents = events.filter((e) => e.type === "flag-found");
-    const escapeEvents = events.filter((e) => e.type === "rabbit-hole-escape");
+    // Parse all events
+    const parsed = events.map((e) => ({
+      type: e.type,
+      data: e.dataJson ? JSON.parse(e.dataJson) : {},
+      timestamp: e.timestamp,
+    }));
 
-    // Count tool usage
-    const toolCounts: Record<string, number> = {};
-    for (const tc of toolCalls) {
-      const data = tc.dataJson ? JSON.parse(tc.dataJson) : {};
-      const name = data.toolName ?? "unknown";
-      toolCounts[name] = (toolCounts[name] ?? 0) + 1;
-    }
+    // Extract agent responses (the model's reasoning and findings)
+    const responses = parsed.filter((e) => e.type === "agent-response");
 
-    let md = `# CTF Writeup: ${task.name}\n\n`;
-    md += `## Challenge Info\n`;
-    md += `- **Category:** ${task.category}\n`;
-    md += `- **Platform:** ${task.platform ?? "N/A"}\n`;
-    md += `- **Solved by:** DeepPen (AI)\n`;
-    md += `- **Time:** ${elapsed}\n`;
-    md += `- **Status:** ${task.status}\n\n`;
+    // Extract tool calls and results as pairs
+    const toolPairs = this.pairToolCalls(parsed);
 
-    md += `## Challenge Description\n`;
-    md += `> ${task.challengeDescription}\n\n`;
+    // Extract key findings from tool results
+    const findings = this.extractFindings(toolPairs);
 
-    md += `## Approach\n\n`;
+    // Build writeup
+    let md = "";
 
-    // Build timeline from thinking events
-    if (thinking.length > 0) {
-      md += `### Analysis\n`;
-      for (const t of thinking.slice(0, 5)) {
-        const data = t.dataJson ? JSON.parse(t.dataJson) : {};
-        if (data.content) {
-          md += `- ${data.content.slice(0, 150)}\n`;
+    // Header
+    md += `# ${task.name}\n\n`;
+    md += `| Field | Value |\n|-------|-------|\n`;
+    md += `| Category | ${task.category} |\n`;
+    md += `| Platform | ${task.platform || "N/A"} |\n`;
+    md += `| Status | ${task.status} |\n`;
+    md += `| Time | ${elapsed} |\n`;
+    md += `| Flag | \`${flag}\` |\n\n`;
+
+    // Challenge description
+    md += `## Challenge\n\n`;
+    md += `${task.challengeDescription}\n\n`;
+
+    // Approach — from agent responses
+    if (responses.length > 0) {
+      md += `## Approach\n\n`;
+      for (const r of responses) {
+        const text = r.data.content ?? "";
+        if (text.trim()) {
+          md += `${text.trim()}\n\n`;
         }
       }
-      md += `\n`;
     }
 
-    if (escapeEvents.length > 0) {
-      md += `### Pivots\n`;
-      for (const e of escapeEvents) {
-        const data = e.dataJson ? JSON.parse(e.dataJson) : {};
-        md += `- ${data.content ?? "Approach changed"}\n`;
+    // Key findings — extracted from tool outputs
+    if (findings.length > 0) {
+      md += `## Key Findings\n\n`;
+      for (const f of findings) {
+        md += `### ${f.title}\n\n`;
+        md += `\`\`\`\n${f.content}\n\`\`\`\n\n`;
+      }
+    }
+
+    // Reconnaissance summary
+    const reconTools = toolPairs.filter((p) =>
+      ["web_fetch", "execute", "curl"].includes(p.name)
+    );
+    if (reconTools.length > 0) {
+      md += `## Reconnaissance\n\n`;
+      for (const t of reconTools.slice(0, 15)) {
+        const input = this.formatToolInput(t.name, t.input);
+        const output = t.output ? t.output.slice(0, 300) : "(no output)";
+        md += `**${t.name}** \`${input}\`\n`;
+        md += `\`\`\`\n${output}\n\`\`\`\n\n`;
+      }
+    }
+
+    // Tools used summary
+    const toolCounts: Record<string, number> = {};
+    for (const p of toolPairs) {
+      toolCounts[p.name] = (toolCounts[p.name] ?? 0) + 1;
+    }
+    if (Object.keys(toolCounts).length > 0) {
+      md += `## Tools Used\n\n`;
+      md += `| Tool | Calls |\n|------|-------|\n`;
+      for (const [name, count] of Object.entries(toolCounts)) {
+        md += `| ${name} | ${count} |\n`;
       }
       md += `\n`;
     }
 
-    md += `## Flag\n`;
-    md += `\`${flag}\`\n\n`;
-
-    md += `## Tools Used\n`;
-    md += `| Tool | Count |\n`;
-    md += `|------|-------|\n`;
-    for (const [name, count] of Object.entries(toolCounts)) {
-      md += `| ${name} | ${count} |\n`;
-    }
-    md += `\n`;
-
-    if (flagEvents.length > 0) {
-      md += `## Flag Discovery\n`;
-      for (const f of flagEvents) {
-        const data = f.dataJson ? JSON.parse(f.dataJson) : {};
-        md += `Flag found: \`${data.flag ?? "unknown"}\`\n`;
-      }
+    // Result
+    md += `## Result\n\n`;
+    if (task.status === "completed" && flag !== "Not found") {
+      md += `Challenge solved successfully. Flag: \`${flag}\`\n`;
+    } else if (task.status === "stopped" && task.error) {
+      md += `Task stopped: ${task.error}\n`;
+    } else {
+      md += `Task ended with status: ${task.status}\n`;
     }
 
     return md;
+  }
+
+  /** Pair tool-call events with their tool-result events */
+  private pairToolCalls(parsed: any[]): Array<{ name: string; input: any; output: string | null }> {
+    const pairs: Array<{ name: string; input: any; output: string | null }> = [];
+    const pending = new Map<string, any>();
+
+    for (const e of parsed) {
+      if (e.type === "tool-call") {
+        // Use a temp key since we don't have toolCall.id in the event
+        const key = `${e.data.toolName}-${e.timestamp}`;
+        pending.set(key, { name: e.data.toolName, input: e.data.toolInput });
+      } else if (e.type === "tool-result") {
+        // Find matching tool-call by name and proximity
+        const matchKey = [...pending.keys()].find((k) =>
+          k.startsWith(e.data.toolName + "-") &&
+          Math.abs(parseInt(k.split("-").pop() ?? "0") - e.timestamp) < 10000
+        );
+        if (matchKey) {
+          const call = pending.get(matchKey)!;
+          pairs.push({ name: call.name, input: call.input, output: e.data.toolOutput ?? null });
+          pending.delete(matchKey);
+        } else {
+          pairs.push({ name: e.data.toolName, input: null, output: e.data.toolOutput ?? null });
+        }
+      }
+    }
+
+    // Add unmatched calls
+    for (const [, call] of pending) {
+      pairs.push({ name: call.name, input: call.input, output: null });
+    }
+
+    return pairs;
+  }
+
+  /** Extract interesting findings from tool results */
+  private extractFindings(toolPairs: Array<{ name: string; input: any; output: string | null }>): Array<{ title: string; content: string }> {
+    const findings: Array<{ title: string; content: string }> = [];
+
+    for (const t of toolPairs) {
+      if (!t.output) continue;
+
+      // Look for interesting patterns in tool output
+      const output = t.output;
+
+      // HTTP responses with interesting content
+      if (t.name === "web_fetch" && output.length > 50) {
+        const input = this.formatToolInput(t.name, t.input);
+        findings.push({
+          title: `Web: ${input}`,
+          content: output.slice(0, 500),
+        });
+      }
+
+      // Execute commands that returned useful info
+      if (t.name === "execute" && t.input?.command) {
+        const cmd = t.input.command;
+        // Skip trivial commands
+        if (cmd.startsWith("ls") || cmd.startsWith("pwd") || cmd.startsWith("echo")) continue;
+        if (output.length > 30 && !output.includes("error") && !output.includes("not found")) {
+          findings.push({
+            title: `Command: ${cmd.slice(0, 60)}`,
+            content: output.slice(0, 500),
+          });
+        }
+      }
+    }
+
+    // Deduplicate by title
+    const seen = new Set<string>();
+    return findings.filter((f) => {
+      if (seen.has(f.title)) return false;
+      seen.add(f.title);
+      return true;
+    }).slice(0, 10);
+  }
+
+  private formatToolInput(name: string, input: any): string {
+    if (!input) return "";
+    if (typeof input === "string") return input.slice(0, 80);
+    if (input.url) return input.url;
+    if (input.command) return input.command.slice(0, 80);
+    if (input.path) return input.path;
+    return JSON.stringify(input).slice(0, 80);
+  }
+
+  private formatTime(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (minutes < 60) return `${minutes}m ${secs}s`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
   }
 
   private rowToWriteup(row: any): Writeup {
