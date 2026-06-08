@@ -7,7 +7,7 @@ import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createStreamEmitterMiddleware } from "../middleware/streamEmitter.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
-import { createMiddleware } from "langchain";
+import { createMiddleware, ToolMessage } from "langchain";
 import { DockerBackend } from "../backends/docker.js";
 import { LocalBackend } from "../backends/local.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
@@ -178,13 +178,20 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     name: "TaskTimeout",
     wrapToolCall: async (request: any, handler: any) => {
       if (request.toolCall?.name === "task") {
-        const timeout = 60_000; // 60s timeout for subagent
-        return Promise.race([
-          handler(request),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Subagent timed out after 60s")), timeout)
-          ),
-        ]).catch((err: Error) => `Error: ${err.message}. Use execute/web_fetch tools directly instead.`);
+        const timeout = 60_000;
+        try {
+          return await Promise.race([
+            handler(request),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Subagent timed out after 60s")), timeout)
+            ),
+          ]);
+        } catch (err: any) {
+          return new ToolMessage({
+            content: `Error: ${err.message}. Use execute/web_fetch tools directly instead.`,
+            tool_call_id: request.toolCall.id ?? "timeout",
+          });
+        }
       }
       return handler(request);
     },
