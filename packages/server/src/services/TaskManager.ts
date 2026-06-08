@@ -313,28 +313,26 @@ export class TaskManager extends EventEmitter {
       const elapsedMs = task.startedAt
         ? Date.now() - task.startedAt.getTime()
         : 0;
-      // Get final flag count and check if agent reported completion
+      // Get final flag count from DB (actual validated flags)
       const finalTask = await this.getTask(taskId);
       const finalFlags = finalTask?.flag ? finalTask.flag.split(",").filter(Boolean) : [];
       const flagCount = finalFlags.length;
 
-      // Check if agent explicitly reported all challenges solved
-      const agentCompleted = result.messages.some((m: any) =>
-        typeof m.content === "string" && m.content.includes("ALL_CHALLENGES_SOLVED")
-      );
+      // Count actual flag-found events in DB (not just agent's claims)
+      const flagEvents = await db
+        .select()
+        .from(streamEvents)
+        .where(eq(streamEvents.taskId, taskId));
+      const actualFlagCount = flagEvents.filter((e: any) => e.type === "flag-found").length;
 
-      // Determine status:
-      // - Agent reported ALL_CHALLENGES_SOLVED → completed
-      // - Has flags but agent didn't report completion → stopped (partial)
-      // - No flags → failed
+      // Determine status based on ACTUAL flags found, not agent's claims
       let status: TaskStatus;
       let eventMsg: string;
-      if (agentCompleted) {
-        status = "completed";
-        eventMsg = `All challenges solved! ${flagCount} flag(s) found: ${finalFlags.join(", ")}`;
-      } else if (flagCount > 0) {
+      if (actualFlagCount > 0) {
+        // Has actual flags — mark as stopped (partial) so user can review
+        // Only mark completed if ALL challenges are verified solved (future enhancement)
         status = "stopped";
-        eventMsg = `Agent stopped. ${flagCount} flag(s) found so far: ${finalFlags.join(", ")}`;
+        eventMsg = `Agent finished. ${actualFlagCount} flag(s) found: ${finalFlags.join(", ")}`;
       } else {
         status = "failed";
         eventMsg = "No flags found";
@@ -348,7 +346,7 @@ export class TaskManager extends EventEmitter {
       this.emitStreamEvent(taskId, {
         id: uuid(),
         parentId: null,
-        type: status === "completed" ? "task-complete" : "task-error",
+        type: actualFlagCount > 0 ? "task-complete" : "task-error",
         timestamp: Date.now(),
         data: { content: eventMsg },
         status: "complete",
