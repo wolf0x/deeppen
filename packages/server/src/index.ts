@@ -17,6 +17,8 @@ import { WriteupGenerator } from "./services/WriteupGenerator.js";
 import { createWriteupRoutes } from "./routes/writeups.js";
 import { ChatService } from "./services/ChatService.js";
 import { createChatRoutes } from "./routes/chat.js";
+import { SettingsStore } from "./services/SettingsStore.js";
+import { createSettingsRoutes } from "./routes/settings.js";
 
 const PORT = parseInt(process.env.PORT ?? "4000");
 const app: any = express();
@@ -32,6 +34,7 @@ const apiConnector = new APIConnector();
 const containerManager = new ContainerManager();
 const writeupGenerator = new WriteupGenerator();
 const chatService = new ChatService(configStore, taskManager);
+const settingsStore = new SettingsStore();
 
 // Wire TaskManager stream events to StreamBridge
 taskManager.on("stream", (taskId: string, event: any) => {
@@ -49,6 +52,7 @@ app.use("/api/config/skills", createSkillRoutes());
 app.use("/api/config/container", createContainerRoutes(containerManager));
 app.use("/api/writeups", createWriteupRoutes(writeupGenerator));
 app.use("/api/chat", createChatRoutes(chatService));
+app.use("/api/settings", createSettingsRoutes(settingsStore));
 
 // Start server
 app.listen(PORT, () => {

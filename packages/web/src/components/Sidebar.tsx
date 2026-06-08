@@ -11,6 +11,7 @@ const nav = [
   { path: "/config/skills", label: "Skills", icon: "🧩" },
   { path: "/config/container", label: "Container", icon: "🐳" },
   { path: "/config/connectors", label: "Connectors", icon: "🔗" },
+  { path: "/settings", label: "Settings", icon: "⚙️" },
 ];
 
 export function Sidebar() {
