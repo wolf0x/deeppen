@@ -75,10 +75,18 @@ function describeToolResult(name: string, output: string): string {
   return firstLine.slice(0, 120) + "…";
 }
 
-// ─── Status badge ──────────────────────────────────────────────
-function StatusDot({ status }: { status: string }) {
+// ─── Status indicator with animation ───────────────────────────
+function StatusIndicator({ status }: { status: string }) {
   if (status === "running") {
-    return <span className="w-2 h-2 bg-accent-blue rounded-full animate-pulse flex-shrink-0" />;
+    return (
+      <span className="flex-shrink-0 flex items-center gap-1">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-blue opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-blue" />
+        </span>
+        <span className="text-[10px] text-accent-blue animate-pulse">running</span>
+      </span>
+    );
   }
   if (status === "error") {
     return <span className="w-2 h-2 bg-accent-red rounded-full flex-shrink-0" />;
@@ -151,13 +159,16 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
     ? TOOL_ICONS[data.toolName ?? ""] ?? null
     : null;
 
+  const isRunning = event.status === "running";
+
   return (
-    <div className="my-0.5">
+    <div className={`my-0.5 ${isRunning ? "animate-pulse-subtle" : ""}`}>
       {/* ── Header row ── */}
       <div
         className={`flex items-center gap-2 py-1 px-2 rounded transition-colors ${
           canExpand ? "cursor-pointer hover:bg-bg-elevated" : "cursor-default"
-        } ${event.type === "flag-found" ? "bg-accent-green/10 border border-accent-green/20" : ""}`}
+        } ${event.type === "flag-found" ? "bg-accent-green/10 border border-accent-green/20" : ""}
+        ${isRunning ? "bg-accent-blue/5 border-l-2 border-accent-blue" : ""}`}
         style={{ paddingLeft: `${event.depth * 16 + 8}px` }}
         onClick={() => { if (canExpand) setExpanded(prev => !prev); }}
       >
@@ -171,8 +182,8 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
           {toolIcon ? toolIcon.icon : config.icon}
         </span>
 
-        {/* Status dot */}
-        <StatusDot status={event.status} />
+        {/* Status indicator */}
+        <StatusIndicator status={event.status} />
 
         {/* Node title — the meaningful description */}
         <span className={`text-xs min-w-0 flex-1 ${
