@@ -313,29 +313,44 @@ export class TaskManager extends EventEmitter {
       const elapsedMs = task.startedAt
         ? Date.now() - task.startedAt.getTime()
         : 0;
-      // Get final flag count from DB (may have been updated by handleFlagFound)
+      // Get final flag count and check if agent reported completion
       const finalTask = await this.getTask(taskId);
       const finalFlags = finalTask?.flag ? finalTask.flag.split(",").filter(Boolean) : [];
       const flagCount = finalFlags.length;
 
+      // Check if agent explicitly reported all challenges solved
+      const agentCompleted = result.messages.some((m: any) =>
+        typeof m.content === "string" && m.content.includes("ALL_CHALLENGES_SOLVED")
+      );
+
+      // Determine status:
+      // - Agent reported ALL_CHALLENGES_SOLVED → completed
+      // - Has flags but agent didn't report completion → stopped (partial)
+      // - No flags → failed
+      let status: TaskStatus;
+      let eventMsg: string;
+      if (agentCompleted) {
+        status = "completed";
+        eventMsg = `All challenges solved! ${flagCount} flag(s) found: ${finalFlags.join(", ")}`;
+      } else if (flagCount > 0) {
+        status = "stopped";
+        eventMsg = `Agent stopped. ${flagCount} flag(s) found so far: ${finalFlags.join(", ")}`;
+      } else {
+        status = "failed";
+        eventMsg = "No flags found";
+      }
+
       await db
         .update(tasks)
-        .set({
-          status: flagCount > 0 ? "completed" : "failed",
-          completedAt: new Date(),
-          elapsedMs,
-          updatedAt: new Date(),
-        })
+        .set({ status, completedAt: new Date(), elapsedMs, updatedAt: new Date() })
         .where(eq(tasks.id, taskId));
 
       this.emitStreamEvent(taskId, {
         id: uuid(),
         parentId: null,
-        type: flagCount > 0 ? "task-complete" : "task-error",
+        type: status === "completed" ? "task-complete" : "task-error",
         timestamp: Date.now(),
-        data: flagCount > 0
-          ? { content: `Agent finished. ${flagCount} flag(s) found: ${finalFlags.join(", ")}` }
-          : { error: "No flags found" },
+        data: { content: eventMsg },
         status: "complete",
         depth: 0,
       });
