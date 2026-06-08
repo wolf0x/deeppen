@@ -1,102 +1,69 @@
 import { useState, useEffect } from "react";
 import type { StreamEvent } from "@deeppen/shared";
 
-// ─── Tool icons & colors ───────────────────────────────────────
-const TOOL_ICONS: Record<string, { icon: string; color: string }> = {
-  execute: { icon: "⌨️", color: "text-accent-orange" },
-  web_fetch: { icon: "🌐", color: "text-accent-blue" },
-  curl: { icon: "📡", color: "text-accent-blue" },
-  nmap: { icon: "🔍", color: "text-accent-purple" },
-  read_file: { icon: "📖", color: "text-text-secondary" },
-  write_file: { icon: "📝", color: "text-accent-green" },
-  ls: { icon: "📂", color: "text-text-secondary" },
-  grep: { icon: "🔎", color: "text-accent-purple" },
-  glob: { icon: "🔎", color: "text-accent-purple" },
-  task: { icon: "🤖", color: "text-accent-orange" },
-  write_todos: { icon: "📋", color: "text-text-secondary" },
+// ─── Tool display config ───────────────────────────────────────
+const TOOL_DISPLAY: Record<string, { icon: string; color: string; label: string }> = {
+  execute:     { icon: "⌨️", color: "text-accent-orange", label: "Execute" },
+  web_fetch:   { icon: "🌐", color: "text-accent-blue",   label: "Fetch" },
+  curl:        { icon: "📡", color: "text-accent-blue",   label: "Curl" },
+  nmap:        { icon: "🔍", color: "text-accent-purple",  label: "Nmap" },
+  read_file:   { icon: "📖", color: "text-accent-blue",   label: "Read" },
+  write_file:  { icon: "📝", color: "text-accent-green",  label: "Write" },
+  ls:          { icon: "📂", color: "text-text-secondary", label: "List" },
+  grep:        { icon: "🔎", color: "text-accent-purple",  label: "Grep" },
+  glob:        { icon: "🔎", color: "text-accent-purple",  label: "Glob" },
+  task:        { icon: "🤖", color: "text-accent-orange", label: "Task" },
+  write_todos: { icon: "📋", color: "text-text-secondary", label: "Plan" },
 };
 
-// ─── Event type config ─────────────────────────────────────────
-const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
-  "agent-start":          { icon: "▶",  color: "text-accent-blue",   label: "Agent" },
-  "agent-think":          { icon: "🧠", color: "text-accent-purple", label: "Thinking" },
-  "agent-response":       { icon: "💬", color: "text-text-primary",  label: "Analysis" },
-  "tool-call":            { icon: "🔧", color: "text-accent-blue",   label: "Tool" },
-  "tool-result":          { icon: "✅", color: "text-accent-green",  label: "Result" },
-  "subagent-spawn":       { icon: "🤖", color: "text-accent-orange", label: "Subagent" },
-  "subagent-return":      { icon: "↩️", color: "text-accent-purple", label: "Return" },
-  "flag-found":           { icon: "🏁", color: "text-accent-green",  label: "FLAG" },
-  "flag-submitted":       { icon: "📤", color: "text-accent-blue",   label: "Submitted" },
-  "flag-accepted":        { icon: "✅", color: "text-accent-green",  label: "ACCEPTED" },
-  "flag-rejected":        { icon: "❌", color: "text-accent-red",    label: "REJECTED" },
-  "rabbit-hole-escape":   { icon: "🐰", color: "text-accent-orange", label: "Pivot" },
-  "task-complete":        { icon: "🎉", color: "text-accent-green",  label: "Complete" },
-  "task-error":           { icon: "💥", color: "text-accent-red",    label: "Error" },
-};
-
-const EXPANDABLE = new Set(["tool-call", "tool-result", "agent-response", "agent-think"]);
-
-// ─── Build a human-readable summary for a tool call ────────────
-function describeToolCall(name: string, input: any): string {
+// ─── Build concise tool summary ────────────────────────────────
+function toolSummary(name: string, input: any): string {
   if (!input) return name;
   const obj = typeof input === "string" ? {} : input;
-
   switch (name) {
-    case "execute":
-      return obj.command ? `execute: ${obj.command.slice(0, 100)}` : "execute";
-    case "web_fetch":
-      return obj.url ? `fetch: ${obj.url}` : "web_fetch";
-    case "curl":
-      return obj.url ? `curl: ${obj.url}` : "curl";
-    case "read_file":
-      return obj.file_path ? `read: ${obj.file_path}` : "read_file";
-    case "write_file":
-      return obj.file_path ? `write: ${obj.file_path}` : "write_file";
-    case "ls":
-      return obj.path ? `ls: ${obj.path}` : "ls";
-    case "grep":
-      return obj.pattern ? `grep: "${obj.pattern}"` : "grep";
-    case "glob":
-      return obj.pattern ? `glob: ${obj.pattern}` : "glob";
-    case "task":
-      return obj.description ? `delegate: ${obj.description.slice(0, 80)}` : "subagent";
-    case "write_todos":
-      return obj.todos ? `plan: ${obj.todos.length} tasks` : "write_todos";
-    default:
-      return name;
+    case "execute":    return obj.command?.slice(0, 80) ?? "execute";
+    case "web_fetch":  return obj.url ?? "fetch";
+    case "curl":       return obj.url ?? "curl";
+    case "read_file":  return obj.file_path ?? "read";
+    case "write_file": return obj.file_path ?? "write";
+    case "ls":         return obj.path ?? "ls";
+    case "grep":       return `"${obj.pattern ?? ""}" ${obj.path ?? ""}`.trim();
+    case "glob":       return obj.pattern ?? "glob";
+    case "task":       return obj.description?.slice(0, 60) ?? "subagent";
+    case "write_todos": return `${obj.todos?.length ?? 0} tasks`;
+    default:           return name;
   }
 }
 
-// ─── Build a short preview for tool result ──────────────────────
-function describeToolResult(name: string, output: string): string {
+function resultSummary(name: string, output: string): string {
   if (!output) return "";
-  const firstLine = output.split("\n")[0].trim();
-  if (firstLine.length <= 120) return firstLine;
-  return firstLine.slice(0, 120) + "…";
+  const lines = output.split("\n").filter(l => l.trim());
+  if (name === "grep" || name === "glob") {
+    return `${lines.length} matches`;
+  }
+  if (lines.length > 3) {
+    return `${lines.length} lines`;
+  }
+  return lines[0]?.slice(0, 100) ?? "";
 }
 
-// ─── Status indicator with animation ───────────────────────────
-function StatusIndicator({ status }: { status: string }) {
+// ─── Status dot ────────────────────────────────────────────────
+function StatusDot({ status }: { status: string }) {
   if (status === "running") {
     return (
-      <span className="flex-shrink-0 flex items-center gap-1">
-        <span className="relative flex h-3 w-3">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-blue opacity-60" />
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-accent-blue" />
-        </span>
+      <span className="relative flex h-2 w-2 flex-shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-blue opacity-60" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-blue" />
       </span>
     );
   }
   if (status === "error") {
-    return <span className="w-2.5 h-2.5 bg-accent-red rounded-full flex-shrink-0" />;
-  }
-  if (status === "complete") {
-    return <span className="w-2 h-2 bg-accent-green/50 rounded-full flex-shrink-0" />;
+    return <span className="w-2 h-2 bg-accent-red rounded-full flex-shrink-0" />;
   }
   return null;
 }
 
-// ─── Main TreeNode component ───────────────────────────────────
+// ─── Main TreeNode ─────────────────────────────────────────────
 export function TreeNode({ event, children, defaultExpanded = true, isLatest = false }: {
   event: StreamEvent;
   children?: React.ReactNode;
@@ -104,129 +71,176 @@ export function TreeNode({ event, children, defaultExpanded = true, isLatest = f
   isLatest?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const config = TYPE_CONFIG[event.type] ?? { icon: "•", color: "text-text-secondary", label: event.type };
-  const hasChildren = !!children;
-  const canExpand = hasChildren || EXPANDABLE.has(event.type);
   const data = event.data ?? {};
+  const hasChildren = !!children;
+  const isRunning = event.status === "running";
+  const showPulse = isLatest && isRunning;
 
-  // Sync expanded state when defaultExpanded changes (e.g. new events arrive)
-  useEffect(() => {
-    setExpanded(defaultExpanded);
-  }, [defaultExpanded]);
-
-  // Always expand flags and errors
+  useEffect(() => { setExpanded(defaultExpanded); }, [defaultExpanded]);
   useEffect(() => {
     if (event.type.startsWith("flag-") || event.type === "task-error" || event.type === "task-complete") {
       setExpanded(true);
     }
   }, [event.type]);
 
-  // ─── Build display content ─────────────────────────────────
-  let nodeTitle = "";
-  let fullContent = "";
+  // ─── Render by event type ──────────────────────────────────
 
+  // Agent Thinking / Response — inline text block
+  if (event.type === "agent-response" || event.type === "agent-think") {
+    const text = data.content ?? "";
+    return (
+      <div className={`my-2 ${showPulse ? "animate-pulse-subtle" : ""}`}>
+        <div className="flex items-start gap-2" style={{ paddingLeft: `${event.depth * 16}px` }}>
+          <span className="text-accent-purple flex-shrink-0 mt-0.5">🧠</span>
+          <p className="text-xs text-text-primary leading-relaxed whitespace-pre-wrap">
+            {text.slice(0, 500)}{text.length > 500 ? "…" : ""}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Agent Start
+  if (event.type === "agent-start") {
+    return (
+      <div className="my-2 flex items-center gap-2" style={{ paddingLeft: `${event.depth * 16}px` }}>
+        <span className="text-accent-blue">▶</span>
+        <span className="text-xs text-accent-blue font-medium">Agent started</span>
+        {isRunning && <StatusDot status="running" />}
+      </div>
+    );
+  }
+
+  // Tool Call — single line with tool name and params
   if (event.type === "tool-call") {
     const toolName = data.toolName ?? "unknown";
-    nodeTitle = describeToolCall(toolName, data.toolInput);
-    fullContent = typeof data.toolInput === "string"
-      ? data.toolInput
-      : JSON.stringify(data.toolInput ?? {}, null, 2);
-  } else if (event.type === "tool-result") {
+    const tool = TOOL_DISPLAY[toolName] ?? { icon: "🔧", color: "text-accent-blue", label: toolName };
+    const summary = toolSummary(toolName, data.toolInput);
+
+    return (
+      <div className={`my-1 ${showPulse ? "animate-pulse-subtle" : ""}`}>
+        <div
+          className={`flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-bg-elevated transition-colors ${
+            isRunning ? "bg-accent-blue/5 border-l-2 border-accent-blue" : ""
+          }`}
+          style={{ paddingLeft: `${event.depth * 16 + 4}px` }}
+          onClick={() => setExpanded(prev => !prev)}
+        >
+          <span className="text-xs text-text-secondary/40 w-3">{expanded ? "▾" : "▸"}</span>
+          <span className="text-sm flex-shrink-0">{tool.icon}</span>
+          <span className={`text-xs font-medium ${tool.color}`}>{tool.label}:</span>
+          <span className="text-xs text-text-secondary truncate font-mono">{summary}</span>
+          <StatusDot status={event.status} />
+        </div>
+        {expanded && (
+          <div className="ml-8 my-1">
+            <pre className="text-xs p-2 rounded bg-bg-elevated border border-border overflow-auto max-h-[400px] whitespace-pre-wrap break-words font-mono text-text-secondary">
+              {typeof data.toolInput === "string" ? data.toolInput : JSON.stringify(data.toolInput ?? {}, null, 2)}
+            </pre>
+          </div>
+        )}
+        {expanded && hasChildren && (
+          <div className="border-l border-border/20 ml-6">{children}</div>
+        )}
+      </div>
+    );
+  }
+
+  // Tool Result — concise summary line
+  if (event.type === "tool-result") {
     const toolName = data.toolName ?? "unknown";
     const output = data.toolOutput ?? data.error ?? "";
     const isError = !!data.error;
-    nodeTitle = isError ? `❌ ${data.error}` : describeToolResult(toolName, output);
-    fullContent = output;
-  } else if (event.type === "agent-response") {
-    const text = data.content ?? "";
-    nodeTitle = text.length > 150 ? text.slice(0, 150) + "…" : text;
-    fullContent = text;
-  } else if (event.type === "agent-start") {
-    nodeTitle = "Starting agent...";
-  } else if (event.type === "flag-found") {
-    nodeTitle = data.flag ?? "Flag found";
-    fullContent = data.flag ?? "";
-  } else if (event.type === "task-complete") {
-    nodeTitle = data.content ?? "Task completed";
-    fullContent = data.content ?? "";
-  } else if (event.type === "task-error") {
-    nodeTitle = data.error ?? "Task failed";
-    fullContent = data.error ?? "";
-  } else {
-    const text = data.content ?? data.error ?? "";
-    nodeTitle = text.length > 150 ? text.slice(0, 150) + "…" : text;
-    fullContent = text;
-  }
+    const summary = isError ? `❌ ${data.error}` : resultSummary(toolName, output);
 
-  const hasExpandableContent = fullContent.length > 0 && fullContent !== nodeTitle;
-
-  // ─── Tool-specific icon ────────────────────────────────────
-  const toolIcon = event.type === "tool-call" || event.type === "tool-result"
-    ? TOOL_ICONS[data.toolName ?? ""] ?? null
-    : null;
-
-  const isRunning = event.status === "running";
-  const showAnimation = isLatest && event.status !== "complete";
-
-  return (
-    <div className={`my-0.5 ${showAnimation ? "animate-pulse-subtle" : ""}`}>
-      {/* ── Header row ── */}
-      <div
-        className={`flex items-center gap-2 py-1 px-2 rounded transition-colors ${
-          canExpand ? "cursor-pointer hover:bg-bg-elevated" : "cursor-default"
-        } ${event.type === "flag-found" ? "bg-accent-green/10 border border-accent-green/20" : ""}
-        ${showAnimation ? "bg-accent-blue/5 border-l-2 border-accent-blue" : ""}`}
-        style={{ paddingLeft: `${event.depth * 16 + 8}px` }}
-        onClick={() => { if (canExpand) setExpanded(prev => !prev); }}
-      >
-        {/* Toggle arrow */}
-        <span className="w-4 text-text-secondary/50 text-xs flex-shrink-0 text-center">
-          {canExpand ? (expanded ? "▾" : "▸") : ""}
-        </span>
-
-        {/* Event icon */}
-        <span className="flex-shrink-0 text-sm">
-          {toolIcon ? toolIcon.icon : config.icon}
-        </span>
-
-        {/* Status indicator */}
-        <StatusIndicator status={event.status} />
-
-        {/* Node title — the meaningful description */}
-        <span className={`text-xs min-w-0 flex-1 ${
-          event.type === "flag-found" ? "text-accent-green font-bold font-mono text-sm" :
-          event.type === "tool-result" && data.error ? "text-accent-red" :
-          event.type === "tool-call" ? (toolIcon?.color ?? "text-accent-blue") :
-          event.type === "agent-response" ? "text-text-primary" :
-          event.type === "agent-start" ? "text-accent-blue font-medium" :
-          "text-text-secondary"
-        }`}>
-          {event.type === "flag-found" && <span className="mr-1">🏁</span>}
-          {nodeTitle || <span className="text-text-secondary/50 italic">{config.label}</span>}
-        </span>
-
-        {/* Flag badge */}
-        {event.type === "flag-found" && data.flag && (
-          <span className="flex-shrink-0 bg-accent-green/20 text-accent-green px-2 py-0.5 rounded text-xs font-mono font-bold select-all">
-            {data.flag}
+    return (
+      <div className="my-0.5">
+        <div
+          className="flex items-center gap-2 py-0.5 px-2 rounded cursor-pointer hover:bg-bg-elevated transition-colors"
+          style={{ paddingLeft: `${event.depth * 16 + 4}px` }}
+          onClick={() => setExpanded(prev => !prev)}
+        >
+          <span className="text-xs text-text-secondary/40 w-3">{expanded ? "▾" : "▸"}</span>
+          <span className="text-sm flex-shrink-0">{isError ? "❌" : "✅"}</span>
+          <span className={`text-xs ${isError ? "text-accent-red" : "text-accent-green"}`}>
+            {summary}
           </span>
+        </div>
+        {expanded && (
+          <div className="ml-8 my-1">
+            <pre className="text-xs p-2 rounded bg-bg-elevated border border-border overflow-auto max-h-[400px] whitespace-pre-wrap break-words font-mono text-text-secondary">
+              {output}
+            </pre>
+          </div>
         )}
       </div>
+    );
+  }
 
-      {/* ── Expanded content ── */}
-      {expanded && hasExpandableContent && (
-        <div className="ml-10 my-1">
-          <pre className="text-xs p-3 rounded bg-bg-elevated border border-border overflow-auto max-h-[600px] whitespace-pre-wrap break-words font-mono text-text-secondary leading-relaxed">
-            {fullContent}
-          </pre>
+  // Flag Found — highlighted banner
+  if (event.type === "flag-found") {
+    return (
+      <div className="my-2 mx-2 px-3 py-2 bg-accent-green/10 border border-accent-green/30 rounded-lg"
+        style={{ marginLeft: `${event.depth * 16}px` }}>
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🏁</span>
+          <span className="text-accent-green font-bold text-sm">Flag Found!</span>
+        </div>
+        <p className="text-accent-green font-mono text-sm mt-1 select-all break-all">{data.flag}</p>
+      </div>
+    );
+  }
+
+  // Task Complete / Error
+  if (event.type === "task-complete" || event.type === "task-error") {
+    const isComplete = event.type === "task-complete";
+    return (
+      <div className={`my-2 mx-2 px-3 py-2 rounded-lg ${
+        isComplete ? "bg-accent-green/10 border border-accent-green/30" : "bg-accent-red/10 border border-accent-red/30"
+      }`} style={{ marginLeft: `${event.depth * 16}px` }}>
+        <div className="flex items-center gap-2">
+          <span className="text-lg">{isComplete ? "🎉" : "💥"}</span>
+          <span className={`font-bold text-sm ${isComplete ? "text-accent-green" : "text-accent-red"}`}>
+            {isComplete ? "Task Complete" : "Task Failed"}
+          </span>
+        </div>
+        {(data.content || data.error) && (
+          <p className={`text-xs mt-1 ${isComplete ? "text-accent-green" : "text-accent-red"}`}>
+            {data.content ?? data.error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // Rabbit Hole Escape
+  if (event.type === "rabbit-hole-escape") {
+    return (
+      <div className="my-2 mx-2 px-3 py-2 bg-accent-orange/10 border border-accent-orange/30 rounded-lg"
+        style={{ marginLeft: `${event.depth * 16}px` }}>
+        <div className="flex items-center gap-2">
+          <span>🐰</span>
+          <span className="text-accent-orange font-medium text-xs">Pivot</span>
+        </div>
+        <p className="text-text-secondary text-xs mt-1">{data.content}</p>
+      </div>
+    );
+  }
+
+  // Default fallback
+  const text = data.content ?? data.error ?? "";
+  if (!text && !hasChildren) return null;
+
+  return (
+    <div className="my-0.5" style={{ paddingLeft: `${event.depth * 16}px` }}>
+      {text && (
+        <div className="flex items-start gap-2 py-0.5 px-2">
+          <span className="text-xs text-text-secondary">•</span>
+          <span className="text-xs text-text-secondary">{text.slice(0, 150)}</span>
         </div>
       )}
-
-      {/* ── Children ── */}
-      {expanded && hasChildren && (
-        <div className="border-l border-border/30 ml-5">
-          {children}
-        </div>
+      {hasChildren && (
+        <div className="border-l border-border/20 ml-3">{children}</div>
       )}
     </div>
   );
