@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { v4 as uuid } from "uuid";
-import { db } from "../db/index.js";
+import { db, sqlite } from "../db/index.js";
 import { tasks, streamEvents } from "../db/index.js";
 import { eq, desc } from "drizzle-orm";
 import type { TaskConfig, TaskStatus, StreamEvent } from "@deeppen/shared";
@@ -412,21 +412,21 @@ export class TaskManager extends EventEmitter {
 
   private emitStreamEvent(taskId: string, event: StreamEvent): void {
     try {
-      db.insert(streamEvents)
-        .values({
-          id: event.id,
-          taskId,
-          parentId: event.parentId,
-          type: event.type,
-          timestamp: event.timestamp,
-          dataJson: JSON.stringify(event.data),
-          status: event.status,
-          depth: event.depth,
-        })
-        .onConflictDoNothing()
-        .run();
+      sqlite.prepare(
+        `INSERT OR IGNORE INTO stream_events (id, task_id, parent_id, type, timestamp, data_json, status, depth)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        event.id,
+        taskId,
+        event.parentId,
+        event.type,
+        event.timestamp,
+        JSON.stringify(event.data),
+        event.status,
+        event.depth
+      );
     } catch {
-      // Ignore duplicate event IDs
+      // Ignore any insert errors
     }
 
     this.emit("stream", taskId, event);
