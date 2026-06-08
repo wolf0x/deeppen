@@ -106,14 +106,6 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
   const canExpand = hasChildren || EXPANDABLE.has(event.type);
   const data = event.data ?? {};
 
-  // Auto-collapse thinking events
-  useEffect(() => {
-    if (event.status === "complete" && event.type === "agent-think") {
-      const timer = setTimeout(() => setExpanded(false), 8000);
-      return () => clearTimeout(timer);
-    }
-  }, [event.status, event.type]);
-
   // Always expand flags and errors
   useEffect(() => {
     if (event.type.startsWith("flag-") || event.type === "task-error" || event.type === "task-complete") {
