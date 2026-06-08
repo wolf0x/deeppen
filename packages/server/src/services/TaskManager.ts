@@ -313,26 +313,42 @@ export class TaskManager extends EventEmitter {
       const elapsedMs = task.startedAt
         ? Date.now() - task.startedAt.getTime()
         : 0;
-      // Get final flag count from DB (actual validated flags)
+
+      // Get actual flags from DB (validated by isValidFlag)
       const finalTask = await this.getTask(taskId);
       const finalFlags = finalTask?.flag ? finalTask.flag.split(",").filter(Boolean) : [];
-      const flagCount = finalFlags.length;
+      const actualFlagCount = finalFlags.length;
 
-      // Count actual flag-found events in DB (not just agent's claims)
-      const flagEvents = await db
-        .select()
-        .from(streamEvents)
-        .where(eq(streamEvents.taskId, taskId));
-      const actualFlagCount = flagEvents.filter((e: any) => e.type === "flag-found").length;
+      // Check if agent hit time/iteration limits (rabbit hole escape)
+      const hitLimit = result.messages.some((m: any) =>
+        typeof m.content === "string" && (
+          m.content.includes("TIME LIMIT REACHED") ||
+          m.content.includes("RABBIT HOLE ALERT") ||
+          m.content.includes("ESCALATION:")
+        )
+      );
 
-      // Determine status based on ACTUAL flags found, not agent's claims
+      // Check if agent explicitly confirmed all challenges solved
+      const agentConfirmedComplete = result.messages.some((m: any) =>
+        typeof m.content === "string" && m.content.includes("ALL_CHALLENGES_SOLVED")
+      );
+
+      // Determine final status:
+      // 1. Time/iteration limit hit → stopped (regardless of flags)
+      // 2. Agent confirmed ALL_CHALLENGES_SOLVED + has flags → completed
+      // 3. Has flags but no confirmation → stopped (partial, can retry)
+      // 4. No flags → failed
       let status: TaskStatus;
       let eventMsg: string;
-      if (actualFlagCount > 0) {
-        // Has actual flags — mark as stopped (partial) so user can review
-        // Only mark completed if ALL challenges are verified solved (future enhancement)
+      if (hitLimit) {
         status = "stopped";
-        eventMsg = `Agent finished. ${actualFlagCount} flag(s) found: ${finalFlags.join(", ")}`;
+        eventMsg = `Limit reached. ${actualFlagCount} flag(s) found: ${finalFlags.join(", ")}`;
+      } else if (agentConfirmedComplete && actualFlagCount > 0) {
+        status = "completed";
+        eventMsg = `All challenges solved! ${actualFlagCount} flag(s): ${finalFlags.join(", ")}`;
+      } else if (actualFlagCount > 0) {
+        status = "stopped";
+        eventMsg = `Agent stopped. ${actualFlagCount} flag(s) found: ${finalFlags.join(", ")}`;
       } else {
         status = "failed";
         eventMsg = "No flags found";
@@ -346,7 +362,7 @@ export class TaskManager extends EventEmitter {
       this.emitStreamEvent(taskId, {
         id: uuid(),
         parentId: null,
-        type: actualFlagCount > 0 ? "task-complete" : "task-error",
+        type: status === "completed" ? "task-complete" : "task-error",
         timestamp: Date.now(),
         data: { content: eventMsg },
         status: "complete",
