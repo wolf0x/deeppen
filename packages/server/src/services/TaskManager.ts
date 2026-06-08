@@ -248,7 +248,7 @@ export class TaskManager extends EventEmitter {
           const status = await this.containerManager.getStatus();
           if (!status.running) {
             this.emitStreamEvent(taskId, {
-              id: `container-${Date.now()}`,
+              id: uuid(),
               parentId: null,
               type: "agent-think",
               timestamp: Date.now(),
@@ -261,7 +261,7 @@ export class TaskManager extends EventEmitter {
           useContainer = true;
         } catch (err: any) {
           this.emitStreamEvent(taskId, {
-            id: `container-fallback-${Date.now()}`,
+            id: uuid(),
             parentId: null,
             type: "agent-think",
             timestamp: Date.now(),

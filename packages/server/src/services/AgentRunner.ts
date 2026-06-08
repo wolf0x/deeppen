@@ -2,6 +2,7 @@ import { createDeepAgent } from "deepagents";
 import type { SubAgent } from "deepagents";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
+import { v4 as uuid } from "uuid";
 type BaseChatModel = any; // from @langchain/core, not directly importable in pnpm
 import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createStreamEmitterMiddleware } from "../middleware/streamEmitter.js";
@@ -255,7 +256,7 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
 
   // Emit agent-start
   onStreamEvent?.({
-    id: `start-${Date.now()}`,
+    id: `start-${uuid()}`,
     parentId: null,
     type: "agent-start",
     timestamp: Date.now(),

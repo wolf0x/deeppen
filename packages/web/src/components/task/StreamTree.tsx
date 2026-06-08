@@ -55,10 +55,10 @@ export function StreamTree() {
         </div>
       )}
 
-      {/* Recent events — always visible */}
+      {/* Recent events — visible but collapsed */}
       <div>
         {recentRoots.map((event) => (
-          <EventNode key={event.id} event={event} childMap={childMap} defaultExpanded={true} />
+          <EventNode key={event.id} event={event} childMap={childMap} defaultExpanded={false} />
         ))}
       </div>
     </div>
