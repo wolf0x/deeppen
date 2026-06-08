@@ -73,11 +73,23 @@ export function TaskDetail() {
       <div className="flex-1 overflow-auto p-4 space-y-3">
         {task.flag && (
           <div className="px-5 py-4 bg-accent-green/15 border-2 border-accent-green/40 rounded-lg">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-2">
               <span className="text-accent-green text-lg">{"\u{1F6A9}"}</span>
-              <span className="text-accent-green font-bold text-sm uppercase tracking-wide">Flag Found</span>
+              <span className="text-accent-green font-bold text-sm uppercase tracking-wide">
+                {task.flag.includes(",") ? `${task.flag.split(",").length} Flags Found` : "Flag Found"}
+              </span>
             </div>
-            <p className="text-accent-green font-mono text-lg break-all select-all">{task.flag}</p>
+            {task.flag.includes(",") ? (
+              <div className="space-y-1">
+                {task.flag.split(",").map((f: string, i: number) => (
+                  <p key={i} className="text-accent-green font-mono text-sm break-all select-all">
+                    {i + 1}. {f.trim()}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p className="text-accent-green font-mono text-lg break-all select-all">{task.flag}</p>
+            )}
           </div>
         )}
 

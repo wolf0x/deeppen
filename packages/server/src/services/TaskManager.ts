@@ -312,11 +312,15 @@ export class TaskManager extends EventEmitter {
       const elapsedMs = task.startedAt
         ? Date.now() - task.startedAt.getTime()
         : 0;
+      // Get final flag count from DB (may have been updated by handleFlagFound)
+      const finalTask = await this.getTask(taskId);
+      const finalFlags = finalTask?.flag ? finalTask.flag.split(",").filter(Boolean) : [];
+      const flagCount = finalFlags.length;
+
       await db
         .update(tasks)
         .set({
-          status: result.flag ? "completed" : "failed",
-          flag: result.flag,
+          status: flagCount > 0 ? "completed" : "failed",
           completedAt: new Date(),
           elapsedMs,
           updatedAt: new Date(),
@@ -326,16 +330,16 @@ export class TaskManager extends EventEmitter {
       this.emitStreamEvent(taskId, {
         id: uuid(),
         parentId: null,
-        type: result.flag ? "task-complete" : "task-error",
+        type: flagCount > 0 ? "task-complete" : "task-error",
         timestamp: Date.now(),
-        data: result.flag
-          ? { content: `Flag found: ${result.flag}` }
-          : { error: "No flag found" },
+        data: flagCount > 0
+          ? { content: `Agent finished. ${flagCount} flag(s) found: ${finalFlags.join(", ")}` }
+          : { error: "No flags found" },
         status: "complete",
         depth: 0,
       });
 
-      this.emit("task-complete", taskId, result.flag);
+      this.emit("task-complete", taskId, finalFlags[0]);
     } catch (err: any) {
       if (signal.aborted) return;
       this.handleTaskError(taskId, err);
@@ -375,15 +379,20 @@ export class TaskManager extends EventEmitter {
     taskId: string,
     flag: string,
   ): Promise<void> {
-    // Update task with flag
-    await db
-      .update(tasks)
-      .set({ flag, updatedAt: new Date() })
-      .where(eq(tasks.id, taskId));
+    // Append flag to existing flags (multi-flag support)
+    const task = await this.getTask(taskId);
+    const existingFlags = task?.flag ? task.flag.split(",").map((f: string) => f.trim()) : [];
+    if (!existingFlags.includes(flag)) {
+      existingFlags.push(flag);
+      await db
+        .update(tasks)
+        .set({ flag: existingFlags.join(","), updatedAt: new Date() })
+        .where(eq(tasks.id, taskId));
+    }
 
     // Auto-submit if configured
-    const task = await this.getTask(taskId);
-    if (task?.autoSubmit && task?.connectorId) {
+    const taskForSubmit = await this.getTask(taskId);
+    if (taskForSubmit?.autoSubmit && taskForSubmit?.connectorId) {
       try {
         // TODO: resolve connector and submit flag
         // For now, emit the event

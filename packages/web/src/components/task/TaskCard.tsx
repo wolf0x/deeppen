@@ -31,7 +31,7 @@ export function TaskCard({ task }: { task: any }) {
       {/* Flag if found */}
       {task.flag && (
         <span className="flex-shrink-0 bg-accent-green/15 text-accent-green px-2 py-0.5 rounded text-xs font-mono font-bold">
-          🚩 {task.flag}
+          🚩 {task.flag.includes(",") ? `${task.flag.split(",").length} flags` : task.flag}
         </span>
       )}
 
