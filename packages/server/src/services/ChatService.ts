@@ -4,15 +4,18 @@ import { eq, asc } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { ConfigStore } from "./ConfigStore.js";
 import { createChatModel } from "./AgentRunner.js";
+import { createDeepAgent } from "deepagents";
+import { createWebFetchTool } from "../tools/web_fetch.js";
+import { LocalBackend } from "../backends/local.js";
 import type { TaskManager } from "./TaskManager.js";
 
-const SYSTEM_PROMPT = `You are DeepPen's quick task intake. Your ONLY job is to classify a CTF challenge and create a task — fast.
+const SYSTEM_PROMPT = `You are DeepPen's quick task intake. Your job is to understand CTF challenges and create tasks — fast.
 
 ## Rules
 - NEVER solve the challenge, provide exploits, or give hints.
-- NEVER run tools or do reconnaissance — the solver agent handles that.
-- If the user provides enough info, create the task IMMEDIATELY in your first response.
-- If something critical is missing (no target URL/IP, or unclear category), ask ONE short question — then create the task on the next turn.
+- If the user provides a URL, use web_fetch to read the challenge description.
+- If the user provides enough info, create the task IMMEDIATELY.
+- If something critical is missing (no target URL/IP, or unclear category), ask ONE short question.
 - Keep responses under 2 sentences when creating a task.
 
 ## Task Creation
@@ -154,15 +157,23 @@ export class ChatService {
     const history = await this.getMessages(sessionId);
     const model = createChatModel(modelConfig);
 
-    // Direct LLM call — no tools, no agent, fast response
-    const response = await model.invoke([
-      { role: "system", content: SYSTEM_PROMPT },
-      ...history.map((m) => ({ role: m.role, content: m.content })),
-    ]);
+    // Create agent with web_fetch for URL analysis
+    const agent = createDeepAgent({
+      model,
+      systemPrompt: SYSTEM_PROMPT,
+      tools: [createWebFetchTool()],
+      backend: new LocalBackend(),
+      subagents: [],
+      generalPurposeAgent: false,
+    } as any);
 
-    const responseText = typeof response.content === "string"
-      ? response.content
-      : JSON.stringify(response.content);
+    const agentMessages = history.map((m) => ({ role: m.role, content: m.content }));
+    const result = await agent.invoke({ messages: agentMessages });
+
+    const lastMessage = result.messages[result.messages.length - 1];
+    const responseText = typeof lastMessage.content === "string"
+      ? lastMessage.content
+      : JSON.stringify(lastMessage.content);
 
     // Save assistant message
     const assistantMessage = await this.saveMessage(sessionId, "assistant", responseText);
