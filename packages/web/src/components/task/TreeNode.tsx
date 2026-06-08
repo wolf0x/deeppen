@@ -18,7 +18,7 @@ const TOOL_ICONS: Record<string, { icon: string; color: string }> = {
 
 // ─── Event type config ─────────────────────────────────────────
 const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
-  "agent-start":          { icon: "▶",  color: "text-accent-blue",   label: "Agent Start" },
+  "agent-start":          { icon: "▶",  color: "text-accent-blue",   label: "Agent" },
   "agent-think":          { icon: "🧠", color: "text-accent-purple", label: "Thinking" },
   "agent-response":       { icon: "💬", color: "text-text-primary",  label: "Analysis" },
   "tool-call":            { icon: "🔧", color: "text-accent-blue",   label: "Tool" },
@@ -106,6 +106,11 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
   const canExpand = hasChildren || EXPANDABLE.has(event.type);
   const data = event.data ?? {};
 
+  // Sync expanded state when defaultExpanded changes (e.g. new events arrive)
+  useEffect(() => {
+    setExpanded(defaultExpanded);
+  }, [defaultExpanded]);
+
   // Always expand flags and errors
   useEffect(() => {
     if (event.type.startsWith("flag-") || event.type === "task-error" || event.type === "task-complete") {
@@ -115,12 +120,10 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
 
   // ─── Build display content ─────────────────────────────────
   let nodeTitle = "";
-  let nodeDetail = "";
   let fullContent = "";
 
   if (event.type === "tool-call") {
     const toolName = data.toolName ?? "unknown";
-    const toolIcon = TOOL_ICONS[toolName] ?? { icon: "🔧", color: "text-accent-blue" };
     nodeTitle = describeToolCall(toolName, data.toolInput);
     fullContent = typeof data.toolInput === "string"
       ? data.toolInput
@@ -135,9 +138,17 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
     const text = data.content ?? "";
     nodeTitle = text.length > 150 ? text.slice(0, 150) + "…" : text;
     fullContent = text;
+  } else if (event.type === "agent-start") {
+    nodeTitle = "Starting agent...";
   } else if (event.type === "flag-found") {
-    nodeTitle = data.flag ?? "";
+    nodeTitle = data.flag ?? "Flag found";
     fullContent = data.flag ?? "";
+  } else if (event.type === "task-complete") {
+    nodeTitle = data.content ?? "Task completed";
+    fullContent = data.content ?? "";
+  } else if (event.type === "task-error") {
+    nodeTitle = data.error ?? "Task failed";
+    fullContent = data.error ?? "";
   } else {
     const text = data.content ?? data.error ?? "";
     nodeTitle = text.length > 150 ? text.slice(0, 150) + "…" : text;
@@ -183,10 +194,11 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
           event.type === "tool-result" && data.error ? "text-accent-red" :
           event.type === "tool-call" ? (toolIcon?.color ?? "text-accent-blue") :
           event.type === "agent-response" ? "text-text-primary" :
+          event.type === "agent-start" ? "text-accent-blue font-medium" :
           "text-text-secondary"
         }`}>
           {event.type === "flag-found" && <span className="mr-1">🏁</span>}
-          {nodeTitle}
+          {nodeTitle || <span className="text-text-secondary/50 italic">{config.label}</span>}
         </span>
 
         {/* Flag badge */}
