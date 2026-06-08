@@ -9,19 +9,6 @@ interface StreamState {
 
 export const useStreamStore = create<StreamState>((set) => ({
   events: [],
-  addEvent: (event) =>
-    set((state) => {
-      const events = [...state.events, event];
-
-      // When a tool-result arrives, mark the matching tool-call as complete
-      if (event.type === "tool-result" && event.parentId) {
-        const idx = events.findIndex((e) => e.id === event.parentId);
-        if (idx !== -1 && events[idx].status === "running") {
-          events[idx] = { ...events[idx], status: "complete" };
-        }
-      }
-
-      return { events };
-    }),
+  addEvent: (event) => set((state) => ({ events: [...state.events, event] })),
   clear: () => set({ events: [] }),
 }));

@@ -32,10 +32,11 @@ export function StreamTree() {
   // Split roots into history and recent
   const historyRoots = roots.slice(0, -RECENT_COUNT);
   const recentRoots = roots.slice(-RECENT_COUNT);
+  const latestRootId = roots[roots.length - 1]?.id;
 
   return (
     <div className="font-mono text-xs">
-      {/* History section — collapsed by default */}
+      {/* History section — collapsed */}
       {historyRoots.length > 0 && (
         <div className="mb-2">
           <button
@@ -48,33 +49,40 @@ export function StreamTree() {
           {showHistory && (
             <div className="opacity-70">
               {historyRoots.map((event) => (
-                <EventNode key={event.id} event={event} childMap={childMap} defaultExpanded={false} />
+                <EventNode key={event.id} event={event} childMap={childMap} defaultExpanded={false} isLatest={false} />
               ))}
             </div>
           )}
         </div>
       )}
 
-      {/* Recent events — visible but collapsed */}
+      {/* Recent events — collapsed, latest has animation */}
       <div>
         {recentRoots.map((event) => (
-          <EventNode key={event.id} event={event} childMap={childMap} defaultExpanded={false} />
+          <EventNode
+            key={event.id}
+            event={event}
+            childMap={childMap}
+            defaultExpanded={false}
+            isLatest={event.id === latestRootId}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function EventNode({ event, childMap, defaultExpanded }: {
+function EventNode({ event, childMap, defaultExpanded, isLatest }: {
   event: StreamEvent;
   childMap: Map<string | null, StreamEvent[]>;
   defaultExpanded: boolean;
+  isLatest: boolean;
 }) {
   const children = childMap.get(event.id) ?? [];
   return (
-    <TreeNode event={event} defaultExpanded={defaultExpanded}>
+    <TreeNode event={event} defaultExpanded={defaultExpanded} isLatest={isLatest}>
       {children.map((child) => (
-        <EventNode key={child.id} event={child} childMap={childMap} defaultExpanded={defaultExpanded} />
+        <EventNode key={child.id} event={child} childMap={childMap} defaultExpanded={defaultExpanded} isLatest={false} />
       ))}
     </TreeNode>
   );

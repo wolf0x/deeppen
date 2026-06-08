@@ -80,25 +80,28 @@ function StatusIndicator({ status }: { status: string }) {
   if (status === "running") {
     return (
       <span className="flex-shrink-0 flex items-center gap-1">
-        <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-blue opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-blue" />
+        <span className="relative flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-blue opacity-60" />
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-accent-blue" />
         </span>
-        <span className="text-[10px] text-accent-blue animate-pulse">running</span>
       </span>
     );
   }
   if (status === "error") {
-    return <span className="w-2 h-2 bg-accent-red rounded-full flex-shrink-0" />;
+    return <span className="w-2.5 h-2.5 bg-accent-red rounded-full flex-shrink-0" />;
+  }
+  if (status === "complete") {
+    return <span className="w-2 h-2 bg-accent-green/50 rounded-full flex-shrink-0" />;
   }
   return null;
 }
 
 // ─── Main TreeNode component ───────────────────────────────────
-export function TreeNode({ event, children, defaultExpanded = true }: {
+export function TreeNode({ event, children, defaultExpanded = true, isLatest = false }: {
   event: StreamEvent;
   children?: React.ReactNode;
   defaultExpanded?: boolean;
+  isLatest?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const config = TYPE_CONFIG[event.type] ?? { icon: "•", color: "text-text-secondary", label: event.type };
@@ -163,15 +166,16 @@ export function TreeNode({ event, children, defaultExpanded = true }: {
     : null;
 
   const isRunning = event.status === "running";
+  const showAnimation = isLatest && event.status !== "complete";
 
   return (
-    <div className={`my-0.5 ${isRunning ? "animate-pulse-subtle" : ""}`}>
+    <div className={`my-0.5 ${showAnimation ? "animate-pulse-subtle" : ""}`}>
       {/* ── Header row ── */}
       <div
         className={`flex items-center gap-2 py-1 px-2 rounded transition-colors ${
           canExpand ? "cursor-pointer hover:bg-bg-elevated" : "cursor-default"
         } ${event.type === "flag-found" ? "bg-accent-green/10 border border-accent-green/20" : ""}
-        ${isRunning ? "bg-accent-blue/5 border-l-2 border-accent-blue" : ""}`}
+        ${showAnimation ? "bg-accent-blue/5 border-l-2 border-accent-blue" : ""}`}
         style={{ paddingLeft: `${event.depth * 16 + 8}px` }}
         onClick={() => { if (canExpand) setExpanded(prev => !prev); }}
       >
