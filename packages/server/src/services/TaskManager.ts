@@ -4,6 +4,7 @@ import { db, sqlite } from "../db/index.js";
 import { tasks, streamEvents } from "../db/index.js";
 import { eq, desc } from "drizzle-orm";
 import type { TaskConfig, TaskStatus, StreamEvent } from "@deeppen/shared";
+import { isValidFlag } from "@deeppen/shared";
 import { runCTFAgent } from "./AgentRunner.js";
 import { ConfigStore } from "./ConfigStore.js";
 import { ContainerManager } from "./ContainerManager.js";
@@ -379,9 +380,12 @@ export class TaskManager extends EventEmitter {
     taskId: string,
     flag: string,
   ): Promise<void> {
+    // Validate flag — reject garbage/code
+    if (!isValidFlag(flag)) return;
+
     // Append flag to existing flags (multi-flag support)
     const task = await this.getTask(taskId);
-    const existingFlags = task?.flag ? task.flag.split(",").map((f: string) => f.trim()) : [];
+    const existingFlags = task?.flag ? task.flag.split(",").map((f: string) => f.trim()).filter(Boolean) : [];
     if (!existingFlags.includes(flag)) {
       existingFlags.push(flag);
       await db

@@ -1,5 +1,5 @@
 import { createMiddleware } from "langchain";
-import { FLAG_PATTERNS } from "@deeppen/shared";
+import { FLAG_PATTERNS, isValidFlag } from "@deeppen/shared";
 
 /**
  * Collect all matches of a pattern against text, regardless of whether
@@ -14,14 +14,14 @@ function matchAll(text: string, pattern: RegExp): string[] {
 
 /**
  * Extract all flag-like strings from text using configured patterns.
- * Deduplicates results.
+ * Deduplicates and validates results.
  */
 export function extractFlags(text: string): string[] {
   if (!text) return [];
   const flags: string[] = [];
   for (const pattern of FLAG_PATTERNS) {
     for (const match of matchAll(text, pattern)) {
-      if (!flags.includes(match)) {
+      if (!flags.includes(match) && isValidFlag(match)) {
         flags.push(match);
       }
     }
@@ -51,7 +51,7 @@ export function createFlagExtractorMiddleware(options: FlagExtractorOptions = {}
     const flags: string[] = [];
     for (const pattern of allPatterns) {
       for (const match of matchAll(text, pattern)) {
-        if (!flags.includes(match)) {
+        if (!flags.includes(match) && isValidFlag(match)) {
           flags.push(match);
         }
       }
