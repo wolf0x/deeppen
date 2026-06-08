@@ -411,18 +411,23 @@ export class TaskManager extends EventEmitter {
   }
 
   private emitStreamEvent(taskId: string, event: StreamEvent): void {
-    db.insert(streamEvents)
-      .values({
-        id: event.id,
-        taskId,
-        parentId: event.parentId,
-        type: event.type,
-        timestamp: event.timestamp,
-        dataJson: JSON.stringify(event.data),
-        status: event.status,
-        depth: event.depth,
-      })
-      .run();
+    try {
+      db.insert(streamEvents)
+        .values({
+          id: event.id,
+          taskId,
+          parentId: event.parentId,
+          type: event.type,
+          timestamp: event.timestamp,
+          dataJson: JSON.stringify(event.data),
+          status: event.status,
+          depth: event.depth,
+        })
+        .onConflictDoNothing()
+        .run();
+    } catch {
+      // Ignore duplicate event IDs
+    }
 
     this.emit("stream", taskId, event);
   }
