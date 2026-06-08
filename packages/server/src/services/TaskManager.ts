@@ -388,7 +388,7 @@ export class TaskManager extends EventEmitter {
         // TODO: resolve connector and submit flag
         // For now, emit the event
         this.emitStreamEvent(taskId, {
-          id: `submit-${Date.now()}`,
+          id: uuid(),
           parentId: null,
           type: "flag-submitted",
           timestamp: Date.now(),
@@ -398,7 +398,7 @@ export class TaskManager extends EventEmitter {
         });
       } catch (err: any) {
         this.emitStreamEvent(taskId, {
-          id: `submit-err-${Date.now()}`,
+          id: uuid(),
           parentId: null,
           type: "flag-rejected",
           timestamp: Date.now(),
