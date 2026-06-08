@@ -7,6 +7,7 @@ import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createStreamEmitterMiddleware } from "../middleware/streamEmitter.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
+import { createMiddleware } from "langchain";
 import { DockerBackend } from "../backends/docker.js";
 import { LocalBackend } from "../backends/local.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
@@ -172,6 +173,17 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   const effectiveSkills = skills?.length ? skills : [categorySkillMap[category] ?? skillsRoot + "/bug-bounty/"];
   console.log("[AgentRunner] Skills:", effectiveSkills[0]);
 
+  // Block task tool — prevents subagent delegation which causes hangs
+  const blockTaskTool = createMiddleware({
+    name: "BlockTaskTool",
+    wrapToolCall: async (request: any, handler: any) => {
+      if (request.toolCall?.name === "task") {
+        return "Error: Subagent delegation is disabled. Use execute/web_fetch/other tools directly.";
+      }
+      return handler(request);
+    },
+  });
+
   console.log("[AgentRunner] Creating DeepAgent with", tools.length, "custom tools, skills:", effectiveSkills);
   const agent = createDeepAgent({
     model,
@@ -179,9 +191,11 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     tools,
     backend,
     skills: effectiveSkills,
-    subagents: options.subagents ?? [],
+    subagents: [],
     generalPurposeAgent: false,
     middleware: [
+      // Block subagent delegation — prevents hangs
+      blockTaskTool,
       // Stream events — the ONLY source of tool/model activity events
       createStreamEmitterMiddleware({
         onStreamEvent: (e) => { events.push(e); onStreamEvent?.(e); },
