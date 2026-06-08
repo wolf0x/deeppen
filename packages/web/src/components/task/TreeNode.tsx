@@ -47,19 +47,30 @@ function resultSummary(name: string, output: string): string {
   return lines[0]?.slice(0, 100) ?? "";
 }
 
-// ─── Status dot ────────────────────────────────────────────────
+// ─── Status indicators ─────────────────────────────────────────
+function StatusRunning() {
+  return (
+    <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-blue opacity-50" />
+      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent-blue" />
+    </span>
+  );
+}
+
+function StatusComplete() {
+  return (
+    <span className="flex-shrink-0 text-accent-green text-xs">✓</span>
+  );
+}
+
+function StatusError() {
+  return <span className="w-2 h-2 bg-accent-red rounded-full flex-shrink-0" />;
+}
+
 function StatusDot({ status }: { status: string }) {
-  if (status === "running") {
-    return (
-      <span className="relative flex h-2 w-2 flex-shrink-0">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-blue opacity-60" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-blue" />
-      </span>
-    );
-  }
-  if (status === "error") {
-    return <span className="w-2 h-2 bg-accent-red rounded-full flex-shrink-0" />;
-  }
+  if (status === "running") return <StatusRunning />;
+  if (status === "error") return <StatusError />;
+  if (status === "complete") return <StatusComplete />;
   return null;
 }
 
@@ -118,19 +129,19 @@ export function TreeNode({ event, children, defaultExpanded = true, isLatest = f
     const summary = toolSummary(toolName, data.toolInput);
 
     return (
-      <div className={`my-1 ${showPulse ? "animate-pulse-subtle" : ""}`}>
+      <div className={`my-0.5 ${isRunning ? "animate-pulse-subtle" : ""}`}>
         <div
           className={`flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-bg-elevated transition-colors ${
-            isRunning ? "bg-accent-blue/5 border-l-2 border-accent-blue" : ""
+            isRunning ? "bg-accent-blue/5 border-l-2 border-accent-blue" : "opacity-80"
           }`}
           style={{ paddingLeft: `${event.depth * 16 + 4}px` }}
           onClick={() => setExpanded(prev => !prev)}
         >
           <span className="text-xs text-text-secondary/40 w-3">{expanded ? "▾" : "▸"}</span>
-          <span className="text-sm flex-shrink-0">{tool.icon}</span>
-          <span className={`text-xs font-medium ${tool.color}`}>{tool.label}:</span>
-          <span className="text-xs text-text-secondary truncate font-mono">{summary}</span>
           <StatusDot status={event.status} />
+          <span className="text-sm flex-shrink-0">{tool.icon}</span>
+          <span className={`text-xs font-medium ${isRunning ? tool.color : "text-text-secondary"}`}>{tool.label}:</span>
+          <span className="text-xs text-text-secondary/70 truncate font-mono">{summary}</span>
         </div>
         {expanded && (
           <div className="ml-8 my-1">
