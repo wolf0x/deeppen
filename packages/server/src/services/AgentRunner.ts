@@ -119,7 +119,10 @@ Output your analysis as:
 - Output each flag found on its own line: flag{...}
 - After finding a flag, immediately move to the NEXT unsolved challenge
 - Keep track of solved vs unsolved challenges
-- Continue until all challenges are solved or time runs out
+- **NEVER STOP voluntarily** — keep solving until time runs out
+- Periodically check: how many solved vs total? What's left?
+- When time is running out (25+ minutes), do a final summary
+- Only stop when: ALL solved, or time limit reached, or no more approaches to try
 - When ALL done, output: "ALL_CHALLENGES_SOLVED: [count] flags found"
 
 ## Tools — Use These Directly
@@ -252,7 +255,7 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
       }),
       // Rabbit hole escape — enforces iteration/time limits
       createRabbitHoleEscapeMiddleware({
-        maxIterations: rabbitHole?.maxIterations ?? 50,
+        maxIterations: rabbitHole?.maxIterations ?? 100,
         maxTimeMinutes: rabbitHole?.maxTimeMinutes ?? 30,
         pivotStrategy: rabbitHole?.pivotStrategy ?? "different-approach",
         onEscape: (reason, iterations) => {
