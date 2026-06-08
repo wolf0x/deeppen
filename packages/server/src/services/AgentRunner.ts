@@ -173,12 +173,18 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   const effectiveSkills = skills?.length ? skills : [categorySkillMap[category] ?? skillsRoot + "/bug-bounty/"];
   console.log("[AgentRunner] Skills:", effectiveSkills[0]);
 
-  // Block task tool — prevents subagent delegation which causes hangs
-  const blockTaskTool = createMiddleware({
-    name: "BlockTaskTool",
+  // Timeout wrapper for task tool — prevents subagent hangs
+  const taskTimeoutMiddleware = createMiddleware({
+    name: "TaskTimeout",
     wrapToolCall: async (request: any, handler: any) => {
       if (request.toolCall?.name === "task") {
-        return "Error: Subagent delegation is disabled. Use execute/web_fetch/other tools directly.";
+        const timeout = 60_000; // 60s timeout for subagent
+        return Promise.race([
+          handler(request),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Subagent timed out after 60s")), timeout)
+          ),
+        ]).catch((err: Error) => `Error: ${err.message}. Use execute/web_fetch tools directly instead.`);
       }
       return handler(request);
     },
@@ -191,11 +197,11 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     tools,
     backend,
     skills: effectiveSkills,
-    subagents: [],
+    subagents: options.subagents ?? [],
     generalPurposeAgent: false,
     middleware: [
-      // Block subagent delegation — prevents hangs
-      blockTaskTool,
+      // Subagent timeout — prevents 12min+ hangs
+      taskTimeoutMiddleware,
       // Stream events — the ONLY source of tool/model activity events
       createStreamEmitterMiddleware({
         onStreamEvent: (e) => { events.push(e); onStreamEvent?.(e); },
