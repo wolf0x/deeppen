@@ -8,7 +8,6 @@ import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createStreamEmitterMiddleware } from "../middleware/streamEmitter.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
-import { createMiddleware, ToolMessage } from "langchain";
 import { DockerBackend } from "../backends/docker.js";
 import { LocalBackend } from "../backends/local.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
@@ -18,8 +17,6 @@ import { fileURLToPath } from "node:url";
 
 /**
  * Create a LangChain chat model from a ModelConfig.
- * Supports: anthropic, openai, azure-openai, openai-compatible,
- * ollama, deepseek, minimax, xiaomimio, zhipu, openrouter
  */
 export function createChatModel(config: ModelConfig): BaseChatModel {
   const common = {
@@ -52,7 +49,6 @@ export function createChatModel(config: ModelConfig): BaseChatModel {
         configuration: { baseURL: config.baseUrl },
       });
 
-    // These providers all use OpenAI-compatible API format
     case "openai-compatible":
     case "deepseek":
     case "minimax":
@@ -111,6 +107,7 @@ Output your analysis as:
 ## Phase 2: Execute
 - Use tools step by step to investigate and exploit
 - Work systematically through each challenge
+- For complex sub-tasks, delegate to the general-purpose subagent using the task tool
 
 ## Phase 3: Extract & Continue
 **If SINGLE-FLAG:**
@@ -127,26 +124,20 @@ Output your analysis as:
 - Only stop when: ALL solved, or time limit reached, or no more approaches to try
 - When ALL done, output: "ALL_CHALLENGES_SOLVED: [count] flags found"
 
-## Tools — Use These Directly
+## Available Tools
 - execute: Run any shell command (nmap, sqlmap, curl, gdb, python, etc.)
 - web_fetch: Fetch a URL and return its content
 - ls, read_file, write_file, edit_file, glob, grep: File operations
-
-## CRITICAL: Do NOT Delegate
-- NEVER use the "task" tool or subagents
-- Call execute/web_fetch/other tools DIRECTLY yourself
+- task: Delegate complex sub-tasks to the general-purpose subagent
 
 ## Rules
 - Read skill instructions before starting if available
 - When stuck on one challenge, skip it and try another
-- Document findings for each challenge`;
+- Document findings for each challenge
+- Use the task tool for complex multi-step sub-tasks that benefit from focused execution`;
 
 /**
  * Create and run a DeepAgents agent for CTF solving.
- *
- * This is a thin configuration layer — DeepAgents owns the agent loop,
- * tool execution, skill loading, and subagent delegation.
- * Stream events are emitted via middleware hooks.
  */
 export async function runCTFAgent(options: RunAgentOptions): Promise<{
   flag: string | null;
@@ -179,7 +170,6 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   const tools = [createWebFetchTool()];
 
   // Skills: use container path when Docker is available, host path otherwise
-  // Container mounts skills at /skills/, host has them at projectRoot/skills/
   const skillsRoot = containerManager
     ? "/skills"
     : resolve(dirname(fileURLToPath(import.meta.url)), "../../../../skills");
@@ -222,30 +212,6 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   const effectiveSkills = skills?.length ? skills : (categorySkillMap[category] ?? [skillsRoot + "/bug-bounty/"]);
   console.log("[AgentRunner] Skills:", effectiveSkills.length, "loaded for", category);
 
-  // Timeout wrapper for task tool — prevents subagent hangs
-  const taskTimeoutMiddleware = createMiddleware({
-    name: "TaskTimeout",
-    wrapToolCall: async (request: any, handler: any) => {
-      if (request.toolCall?.name === "task") {
-        const timeout = 60_000;
-        try {
-          return await Promise.race([
-            handler(request),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Subagent timed out after 60s")), timeout)
-            ),
-          ]);
-        } catch (err: any) {
-          return new ToolMessage({
-            content: `Error: ${err.message}. Use execute/web_fetch tools directly instead.`,
-            tool_call_id: request.toolCall.id ?? "timeout",
-          });
-        }
-      }
-      return handler(request);
-    },
-  });
-
   console.log("[AgentRunner] Creating DeepAgent with", tools.length, "custom tools, skills:", effectiveSkills);
   const agent = createDeepAgent({
     model,
@@ -254,10 +220,9 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     backend,
     skills: effectiveSkills,
     subagents: options.subagents ?? [],
-    generalPurposeAgent: false,
+    // Enable default general-purpose subagent — it handles complex sub-tasks
+    generalPurposeAgent: true,
     middleware: [
-      // Subagent timeout — prevents 12min+ hangs
-      taskTimeoutMiddleware,
       // Stream events — the ONLY source of tool/model activity events
       createStreamEmitterMiddleware({
         onStreamEvent: (e) => { events.push(e); onStreamEvent?.(e); },
