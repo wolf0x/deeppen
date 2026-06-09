@@ -96,6 +96,12 @@ export interface RunAgentOptions {
 
 const CTF_SYSTEM_PROMPT = `You are DeepPen, an autonomous CTF challenge solver.
 
+## Environment
+- You are running inside a Kali Linux container with tools: nmap, curl, python3, sqlmap, etc.
+- The target services are running on the HOST machine, accessible via localhost ports
+- DO NOT install packages or set up environments — tools are already available
+- DO NOT try to start Docker or containers — focus on the challenge directly
+
 ## Phase 1: Analyze (FIRST STEP)
 Before doing anything, analyze the challenge description to determine:
 - Is this a SINGLE-FLAG challenge? (one target, one flag to find)
@@ -134,7 +140,8 @@ Output your analysis as:
 - Read skill instructions before starting if available
 - When stuck on one challenge, skip it and try another
 - Document findings for each challenge
-- Use the task tool for complex multi-step sub-tasks that benefit from focused execution`;
+- Use the task tool for complex multi-step sub-tasks that benefit from focused execution
+- DO NOT waste time on setup — focus on solving the challenge`;
 
 /**
  * Create and run a DeepAgents agent for CTF solving.
