@@ -13,6 +13,8 @@ import { DockerBackend } from "../backends/docker.js";
 import { LocalBackend } from "../backends/local.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
 import type { ContainerManager } from "./ContainerManager.js";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /**
  * Create a LangChain chat model from a ModelConfig.
@@ -178,22 +180,47 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
 
   // Skills: use container path when Docker is available, host path otherwise
   // Container mounts skills at /skills/, host has them at projectRoot/skills/
-  const skillsRoot = containerManager ? "/skills" : (() => {
-    const { fileURLToPath } = require("node:url");
-    const { dirname, resolve } = require("node:path");
-    return resolve(dirname(fileURLToPath(import.meta.url)), "../../../../skills");
-  })();
+  const skillsRoot = containerManager
+    ? "/skills"
+    : resolve(dirname(fileURLToPath(import.meta.url)), "../../../../skills");
 
-  const categorySkillMap: Record<string, string> = {
-    web: skillsRoot + "/web-security/",
-    pwn: skillsRoot + "/pwn/",
-    crypto: skillsRoot + "/bug-bounty/",
-    forensics: skillsRoot + "/bug-bounty/",
-    misc: skillsRoot + "/bug-bounty/",
-    "prompt-injection": skillsRoot + "/hunt-llm-ai/",
+  // Load all relevant skills per category
+  const categorySkillMap: Record<string, string[]> = {
+    web: [
+      skillsRoot + "/web-security/",
+      skillsRoot + "/hunt-sqli/",
+      skillsRoot + "/hunt-xss/",
+      skillsRoot + "/hunt-ssrf/",
+      skillsRoot + "/hunt-idor/",
+      skillsRoot + "/hunt-csrf/",
+      skillsRoot + "/hunt-auth-bypass/",
+      skillsRoot + "/hunt-rce/",
+      skillsRoot + "/hunt-file-upload/",
+      skillsRoot + "/hunt-api-misconfig/",
+    ],
+    pwn: [
+      skillsRoot + "/pwn/",
+      skillsRoot + "/security-arsenal/",
+    ],
+    crypto: [
+      skillsRoot + "/bug-bounty/",
+      skillsRoot + "/security-arsenal/",
+    ],
+    forensics: [
+      skillsRoot + "/bug-bounty/",
+    ],
+    misc: [
+      skillsRoot + "/bug-bounty/",
+      skillsRoot + "/hunt-misc/",
+      skillsRoot + "/security-arsenal/",
+    ],
+    "prompt-injection": [
+      skillsRoot + "/hunt-llm-ai/",
+      skillsRoot + "/bug-bounty/",
+    ],
   };
-  const effectiveSkills = skills?.length ? skills : [categorySkillMap[category] ?? skillsRoot + "/bug-bounty/"];
-  console.log("[AgentRunner] Skills:", effectiveSkills[0]);
+  const effectiveSkills = skills?.length ? skills : (categorySkillMap[category] ?? [skillsRoot + "/bug-bounty/"]);
+  console.log("[AgentRunner] Skills:", effectiveSkills.length, "loaded for", category);
 
   // Timeout wrapper for task tool — prevents subagent hangs
   const taskTimeoutMiddleware = createMiddleware({
