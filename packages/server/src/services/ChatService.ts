@@ -4,10 +4,8 @@ import { eq, asc } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { ConfigStore } from "./ConfigStore.js";
 import { createChatModel } from "./AgentRunner.js";
-import { createDeepAgent } from "deepagents";
-import { createWebFetchTool } from "../tools/web_fetch.js";
-import { LocalBackend } from "../backends/local.js";
 import type { TaskManager } from "./TaskManager.js";
+import { TaskConfigSchema } from "@deeppen/shared";
 
 const SYSTEM_PROMPT = `You are DeepPen's quick task intake. Your job is to understand CTF challenges and create tasks — fast.
 
@@ -157,23 +155,15 @@ export class ChatService {
     const history = await this.getMessages(sessionId);
     const model = createChatModel(modelConfig);
 
-    // Create agent with web_fetch for URL analysis
-    const agent = createDeepAgent({
-      model,
-      systemPrompt: SYSTEM_PROMPT,
-      tools: [createWebFetchTool()],
-      backend: new LocalBackend(),
-      subagents: [],
-      generalPurposeAgent: false,
-    } as any);
+    // Direct LLM call — fast and reliable
+    const response = await model.invoke([
+      { role: "system", content: SYSTEM_PROMPT },
+      ...history.map((m) => ({ role: m.role, content: m.content })),
+    ]);
 
-    const agentMessages = history.map((m) => ({ role: m.role, content: m.content }));
-    const result = await agent.invoke({ messages: agentMessages });
-
-    const lastMessage = result.messages[result.messages.length - 1];
-    const responseText = typeof lastMessage.content === "string"
-      ? lastMessage.content
-      : JSON.stringify(lastMessage.content);
+    const responseText = typeof response.content === "string"
+      ? response.content
+      : JSON.stringify(response.content);
 
     // Save assistant message
     const assistantMessage = await this.saveMessage(sessionId, "assistant", responseText);
@@ -226,15 +216,16 @@ export class ChatService {
   /** Create a task from chat-extracted data. Returns the task ID. */
   async createTaskFromChat(taskData: { name: string; description: string; category: string }, modelId?: string): Promise<string> {
     if (!this.taskManager) throw new Error("TaskManager not available");
-    const taskId = await this.taskManager.create({
+    const config = TaskConfigSchema.parse({
       name: taskData.name,
       challenge: {
         description: taskData.description,
-        category: taskData.category as any,
+        category: taskData.category,
       },
-      modelId: modelId as any,
+      modelId,
       autoSubmit: true,
     });
+    const taskId = await this.taskManager.create(config);
     return taskId;
   }
 }
