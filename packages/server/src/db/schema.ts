@@ -46,6 +46,7 @@ export const tasks = sqliteTable("tasks", {
   flag: text("flag"),
   flagAccepted: integer("flag_accepted", { mode: "boolean" }),
   writeupId: text("writeup_id"),
+  userContext: text("user_context"),
   startedAt: integer("started_at", { mode: "timestamp" }),
   completedAt: integer("completed_at", { mode: "timestamp" }),
   elapsedMs: integer("elapsed_ms"),

@@ -231,6 +231,15 @@ export class TaskManager extends EventEmitter {
   }
 
   /**
+   * Update user context for a task (background info, hints, etc.)
+   */
+  async updateUserContext(taskId: string, context: string): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+    await db.update(tasks).set({ userContext: context, updatedAt: new Date() }).where(eq(tasks.id, taskId));
+  }
+
+  /**
    * Get stream events for a task.
    */
   async getStreamEvents(taskId: string): Promise<StreamEvent[]> {
@@ -332,9 +341,15 @@ export class TaskManager extends EventEmitter {
         }
       }
 
+      // Include user context in challenge description if provided
+      let challenge = task.challengeDescription || "";
+      if (task.userContext) {
+        challenge += `\n\n## User-Provided Context\n${task.userContext}`;
+      }
+
       const result = await runCTFAgent({
         modelConfig,
-        challenge: task.challengeDescription,
+        challenge,
         category: task.category,
         skills,
         attachments,
