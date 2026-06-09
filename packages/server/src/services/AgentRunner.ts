@@ -97,8 +97,8 @@ export interface RunAgentOptions {
 const CTF_SYSTEM_PROMPT = `You are DeepPen, an autonomous CTF challenge solver.
 
 ## Environment
-- You are running inside a Kali Linux container with tools: nmap, curl, python3, sqlmap, etc.
-- The target services are running on the HOST machine, accessible via localhost ports
+- You are running inside a Kali Linux container with security tools pre-installed (nmap, curl, python3, sqlmap, etc.)
+- The target is specified in the challenge description — it may be a remote server, domain, URL, or SSH host
 - DO NOT install packages or set up environments — tools are already available
 - DO NOT try to start Docker or containers — focus on the challenge directly
 
