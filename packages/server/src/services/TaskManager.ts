@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import { v4 as uuid } from "uuid";
 import { db, sqlite } from "../db/index.js";
 import { tasks, streamEvents } from "../db/index.js";
-import { eq, desc } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { TaskConfig, TaskStatus, StreamEvent } from "@deeppen/shared";
 import { isValidFlag } from "@deeppen/shared";
 import { runCTFAgent } from "./AgentRunner.js";
@@ -13,6 +13,11 @@ export class TaskManager extends EventEmitter {
   private abortControllers = new Map<string, AbortController>();
   private configStore = new ConfigStore();
   private containerManager = new ContainerManager();
+
+  constructor() {
+    super();
+    this.recoverOrphanedRunningTasks();
+  }
 
   /**
    * Create a new task from config.
@@ -77,14 +82,19 @@ export class TaskManager extends EventEmitter {
     }
 
     // Atomic status transition — prevents double-start race
+    const startedAt = new Date();
+    const startableStatuses: TaskStatus[] = ["created", "paused", "stopped"];
     const result = db
       .update(tasks)
       .set({
         status: "running",
-        startedAt: new Date(),
-        updatedAt: new Date(),
+        startedAt,
+        completedAt: null,
+        elapsedMs: null,
+        error: null,
+        updatedAt: startedAt,
       })
-      .where(eq(tasks.id, taskId))
+      .where(and(eq(tasks.id, taskId), inArray(tasks.status, startableStatuses)))
       .run();
 
     if (result.changes === 0) {
@@ -105,7 +115,12 @@ export class TaskManager extends EventEmitter {
     });
 
     // Run agent in background
-    this.runAgentBackground(taskId, task, modelConfig, abortController.signal)
+    this.runAgentBackground(
+      taskId,
+      { ...task, status: "running", startedAt, completedAt: null, elapsedMs: null, error: null },
+      modelConfig,
+      abortController.signal,
+    )
       .catch((err) => {
         this.handleTaskError(taskId, err);
       });
@@ -287,12 +302,32 @@ export class TaskManager extends EventEmitter {
       if (attachments && attachments.length > 0 && useContainer && this.containerManager) {
         for (const url of attachments) {
           try {
-            const filename = url.split("/").pop() ?? "attachment";
-            await this.containerManager.execute(
-              `curl -sL "${url}" -o /workspace/attachments/${filename}`,
+            const filename = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "attachment";
+            const outputPath = `/workspace/attachments/${filename}`;
+            const result = await this.containerManager.execute(
+              `mkdir -p /workspace/attachments && curl -fsSL ${JSON.stringify(url)} -o ${JSON.stringify(outputPath)}`,
             );
-          } catch {
-            // Log but continue
+            if (result.exitCode !== 0) {
+              this.emitStreamEvent(taskId, {
+                id: uuid(),
+                parentId: null,
+                type: "agent-think",
+                timestamp: Date.now(),
+                data: { content: `Attachment download failed for ${url}: ${result.stderr || result.stdout}` },
+                status: "complete",
+                depth: 1,
+              });
+            }
+          } catch (err: any) {
+            this.emitStreamEvent(taskId, {
+              id: uuid(),
+              parentId: null,
+              type: "agent-think",
+              timestamp: Date.now(),
+              data: { content: `Attachment download skipped for ${url}: ${err.message}` },
+              status: "complete",
+              depth: 1,
+            });
           }
         }
       }
@@ -310,12 +345,12 @@ export class TaskManager extends EventEmitter {
         onFlagFound: (flag) => this.handleFlagFound(taskId, flag),
       });
 
-      const elapsedMs = task.startedAt
-        ? Date.now() - task.startedAt.getTime()
+      const finalTask = await this.getTask(taskId);
+      const elapsedMs = finalTask?.startedAt
+        ? Date.now() - finalTask.startedAt.getTime()
         : 0;
 
       // Get actual flags from DB (validated by isValidFlag)
-      const finalTask = await this.getTask(taskId);
       const finalFlags = finalTask?.flag ? finalTask.flag.split(",").filter(Boolean) : [];
       const actualFlagCount = finalFlags.length;
 
@@ -369,7 +404,11 @@ export class TaskManager extends EventEmitter {
         depth: 0,
       });
 
-      this.emit("task-complete", taskId, finalFlags[0]);
+      if (status === "completed") {
+        this.emit("task-complete", taskId, finalFlags[0]);
+      } else {
+        this.emit("task-error", taskId, new Error(eventMsg));
+      }
     } catch (err: any) {
       if (signal.aborted) return;
       this.handleTaskError(taskId, err);
@@ -382,13 +421,20 @@ export class TaskManager extends EventEmitter {
     taskId: string,
     err: Error,
   ): Promise<void> {
+    const task = await this.getTask(taskId);
+    const completedAt = new Date();
+    const elapsedMs = task?.startedAt
+      ? completedAt.getTime() - task.startedAt.getTime()
+      : 0;
+
     await db
       .update(tasks)
       .set({
         status: "stopped",
         error: err.message,
-        completedAt: new Date(),
-        updatedAt: new Date(),
+        completedAt,
+        elapsedMs,
+        updatedAt: completedAt,
       })
       .where(eq(tasks.id, taskId));
 
@@ -412,8 +458,12 @@ export class TaskManager extends EventEmitter {
     // Validate flag — reject garbage/code
     if (!isValidFlag(flag)) return;
 
+    // Check if task is still running
+    const currentTask = await this.getTask(taskId);
+    if (!currentTask || currentTask.status !== "running") return;
+
     // Append flag to existing flags (multi-flag support)
-    const task = await this.getTask(taskId);
+    const task = currentTask;
     const existingFlags = task?.flag ? task.flag.split(",").map((f: string) => f.trim()).filter(Boolean) : [];
     if (!existingFlags.includes(flag)) {
       existingFlags.push(flag);
@@ -452,7 +502,66 @@ export class TaskManager extends EventEmitter {
     }
   }
 
+  private recoverOrphanedRunningTasks(): void {
+    const rows = sqlite.prepare(
+      "SELECT id, started_at FROM tasks WHERE status = 'running'"
+    ).all() as Array<{ id: string; started_at: number | null }>;
+
+    const orphanedRows = rows.filter((row) => !this.abortControllers.has(row.id));
+    if (orphanedRows.length === 0) return;
+
+    const now = new Date();
+    const nowSeconds = Math.floor(now.getTime() / 1000);
+    const nowMs = now.getTime();
+    const error = "Task was interrupted before the server started; retry to continue.";
+    const updateTask = sqlite.prepare(
+      `UPDATE tasks
+       SET status = 'stopped',
+           error = ?,
+           completed_at = ?,
+           elapsed_ms = ?,
+           updated_at = ?
+       WHERE id = ? AND status = 'running'`
+    );
+    const insertEvent = sqlite.prepare(
+      `INSERT INTO stream_events (id, task_id, parent_id, type, timestamp, data_json, status, depth)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+
+    const recover = sqlite.transaction((tasksToRecover: typeof orphanedRows) => {
+      for (const task of tasksToRecover) {
+        const startedMs = this.timestampToMs(task.started_at);
+        const elapsedMs = Math.max(0, nowMs - (startedMs ?? nowMs));
+        const result = updateTask.run(error, nowSeconds, elapsedMs, nowSeconds, task.id);
+
+        if (result.changes > 0) {
+          insertEvent.run(
+            uuid(),
+            task.id,
+            null,
+            "task-error",
+            nowMs,
+            JSON.stringify({ error }),
+            "error",
+            0
+          );
+        }
+      }
+    });
+
+    recover(orphanedRows);
+  }
+
+  private timestampToMs(timestamp: number | null): number | null {
+    if (timestamp === null) return null;
+    return timestamp > 10_000_000_000 ? timestamp : timestamp * 1000;
+  }
+
   private emitStreamEvent(taskId: string, event: StreamEvent): void {
+    // Check if task is still running — skip events for stopped/completed/failed tasks
+    const taskRow = sqlite.prepare("SELECT status FROM tasks WHERE id = ?").get(taskId) as any;
+    if (!taskRow || taskRow.status !== "running") return;
+
     try {
       sqlite.prepare(
         `INSERT OR IGNORE INTO stream_events (id, task_id, parent_id, type, timestamp, data_json, status, depth)
