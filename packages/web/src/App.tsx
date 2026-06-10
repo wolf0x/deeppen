@@ -11,6 +11,7 @@ import { ContainerConfig } from "./pages/ContainerConfig.js";
 import { ConnectorConfig } from "./pages/ConnectorConfig.js";
 import { Writeups } from "./pages/Writeups.js";
 import { Chat } from "./pages/Chat.js";
+import { Settings } from "./pages/Settings.js";
 
 export function App() {
   return (
@@ -28,6 +29,7 @@ export function App() {
           <Route path="/config/skills" element={<SkillsManager />} />
           <Route path="/config/container" element={<ContainerConfig />} />
           <Route path="/config/connectors" element={<ConnectorConfig />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

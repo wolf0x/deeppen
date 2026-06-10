@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { v4 as uuid } from "uuid";
 import { db, sqlite } from "../db/index.js";
-import { tasks, streamEvents } from "../db/index.js";
+import { tasks, streamEvents, settings } from "../db/index.js";
 import { eq, desc } from "drizzle-orm";
 import type { TaskConfig, TaskStatus, StreamEvent } from "@deeppen/shared";
 import { runCTFAgent } from "./AgentRunner.js";
@@ -272,9 +272,23 @@ export class TaskManager extends EventEmitter {
         }
       }
 
+      // Read settings from database for defaults
+      const settingsRows = await db.select().from(settings);
+      const settingsMap = new Map(settingsRows.map((r: any) => [r.key, r.value]));
+      const getSetting = (key: string, defaultVal: any) => {
+        const val = settingsMap.get(key);
+        if (val === undefined) return defaultVal;
+        try { return JSON.parse(val); } catch { return val; }
+      };
+
       const rabbitHole = task.rabbitHoleConfigJson
         ? JSON.parse(task.rabbitHoleConfigJson)
-        : undefined;
+        : {
+            maxIterations: getSetting("maxIterations", 100),
+            maxTimeMinutes: getSetting("maxTimeMinutes", 30),
+            maxToolCalls: getSetting("maxToolCalls", 500),
+            pivotStrategy: getSetting("pivotStrategy", "different-approach"),
+          };
       const skills = task.skillsJson
         ? JSON.parse(task.skillsJson)
         : undefined;

@@ -90,4 +90,8 @@ export const api = {
   generateWriteup: (taskId: string) => request<any>(`/writeups/generate/${taskId}`, { method: "POST" }),
   updateWriteup: (id: string, content: string) => request<any>(`/writeups/${id}`, { method: "PUT", body: JSON.stringify({ contentMarkdown: content }) }),
   deleteWriteup: (id: string) => request<{ ok: boolean }>(`/writeups/${id}`, { method: "DELETE" }),
+
+  // Settings
+  getSettings: () => request<any>("/settings"),
+  updateSettings: (settings: any) => request<any>("/settings", { method: "PUT", body: JSON.stringify(settings) }),
 };

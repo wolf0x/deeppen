@@ -17,6 +17,7 @@ import { WriteupGenerator } from "./services/WriteupGenerator.js";
 import { createWriteupRoutes } from "./routes/writeups.js";
 import { ChatService } from "./services/ChatService.js";
 import { createChatRoutes } from "./routes/chat.js";
+import { createSettingsRoutes } from "./routes/settings.js";
 
 const PORT = parseInt(process.env.PORT ?? "4000");
 const app: any = express();
@@ -49,6 +50,7 @@ app.use("/api/config/skills", createSkillRoutes());
 app.use("/api/config/container", createContainerRoutes(containerManager));
 app.use("/api/writeups", createWriteupRoutes(writeupGenerator));
 app.use("/api/chat", createChatRoutes(chatService));
+app.use("/api/settings", createSettingsRoutes());
 
 // Start server
 app.listen(PORT, () => {
