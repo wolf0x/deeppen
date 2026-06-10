@@ -167,6 +167,7 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   const model = createChatModel(modelConfig);
   let foundFlag: string | null = null;
   const events: StreamEvent[] = [];
+  let callCounter = 0;
 
   // Backend: Docker if available, otherwise local
   const backend = containerManager
@@ -314,14 +315,93 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   // Invoke the agent — DeepAgents handles the full ReAct loop
   console.log("[AgentRunner] Invoking agent with", challenge.length, "char challenge");
   try {
-    const result = await agent.invoke(
+    // Use v3 streaming to capture subagent events
+    const run = await (agent as any).streamEvents(
       { messages: [{ role: "user", content: challenge }] },
-      { signal: abortSignal },
+      { version: "v3", signal: abortSignal },
     );
-    console.log("[AgentRunner] Agent completed with", result.messages.length, "messages");
+
+    const allMessages: any[] = [];
+
+    // Stream main agent messages
+    for await (const msg of run.messages) {
+      let text = "";
+      for await (const token of msg.text) {
+        text += token;
+      }
+      if (text.trim()) {
+        allMessages.push({ role: "assistant", content: text });
+      }
+    }
+
+    // Stream tool calls (including subagent delegations)
+    for await (const call of run.toolCalls) {
+      const toolName = call.name;
+      const toolInput = call.input;
+
+      // If this is a subagent delegation, stream its activity
+      if (toolName === "task" && call.subagent) {
+        const subagentId = `subagent-${++callCounter}`;
+
+        // Emit subagent spawn event
+        onStreamEvent?.({
+          id: subagentId,
+          parentId: null,
+          type: "subagent-spawn",
+          timestamp: Date.now(),
+          data: {
+            subagentType: toolInput?.subagent_type ?? "general-purpose",
+            content: toolInput?.description?.slice(0, 200) ?? "",
+          },
+          status: "running",
+          depth: 1,
+        });
+
+        // Stream subagent activity
+        try {
+          for await (const subMsg of call.subagent.messages) {
+            let subText = "";
+            for await (const token of subMsg.text) {
+              subText += token;
+            }
+            if (subText.trim()) {
+              onStreamEvent?.({
+                id: uuid(),
+                parentId: subagentId,
+                type: "agent-response",
+                timestamp: Date.now(),
+                data: { content: subText.slice(0, 2000) },
+                status: "complete",
+                depth: 2,
+              });
+            }
+          }
+        } catch {
+          // Subagent streaming error
+        }
+
+        // Emit subagent return event
+        const output = await call.output;
+        onStreamEvent?.({
+          id: uuid(),
+          parentId: subagentId,
+          type: "subagent-return",
+          timestamp: Date.now(),
+          data: { content: typeof output === "string" ? output.slice(0, 500) : "completed" },
+          status: "complete",
+          depth: 1,
+        });
+      }
+    }
+
+    // Get final state
+    const state = await run.output;
+    const finalMessages = state?.messages ?? allMessages;
+
+    console.log("[AgentRunner] Agent completed with", finalMessages.length, "messages");
     return {
       flag: foundFlag,
-      messages: result.messages,
+      messages: finalMessages,
       events,
     };
   } catch (err: any) {
