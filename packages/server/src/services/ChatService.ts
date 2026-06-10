@@ -11,7 +11,8 @@ const SYSTEM_PROMPT = `You are DeepPen's quick task intake. Your job is to under
 
 ## Rules
 - NEVER solve the challenge, provide exploits, or give hints.
-- If the user provides a URL, use web_fetch to read the challenge description.
+- NEVER output tool calls, function calls, or </tool_call> tags. You have NO tools.
+- Respond ONLY with plain text and the task JSON block below.
 - If the user provides enough info, create the task IMMEDIATELY.
 - If something critical is missing (no target URL/IP, or unclear category), ask ONE short question.
 - Keep responses under 2 sentences when creating a task.
@@ -161,9 +162,15 @@ export class ChatService {
       ...history.map((m) => ({ role: m.role, content: m.content })),
     ]);
 
-    const responseText = typeof response.content === "string"
+    let responseText = typeof response.content === "string"
       ? response.content
       : JSON.stringify(response.content);
+
+    // Strip any tool call patterns the model might output (mimo-v2.5-pro quirk)
+    responseText = responseText
+      .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, "")
+      .replace(/\{[\s]*"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[\s\S]*?\}\s*\}/g, "")
+      .trim();
 
     // Save assistant message
     const assistantMessage = await this.saveMessage(sessionId, "assistant", responseText);
