@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { StreamEvent } from "@deeppen/shared";
 
 // ─── Tool display config ───────────────────────────────────────
@@ -55,10 +55,17 @@ export function TreeNode({ event, children, depth = 0, isLatest = false, hasChil
   isLatest?: boolean;
   hasChildren?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const data = event.data ?? {};
   const isRunning = event.status === "running";
   const isSubagent = event.type === "subagent-spawn" || event.type === "subagent-return";
+
+  // Auto-expand running events and important events
+  useEffect(() => {
+    if (isRunning || event.type === "flag-found" || event.type === "task-error" || event.type === "task-complete") {
+      setExpanded(true);
+    }
+  }, [isRunning, event.type]);
 
   // ─── Render by event type ──────────────────────────────────
 
