@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { StreamEvent } from "@deeppen/shared";
 
 // ─── Tool display config ───────────────────────────────────────
@@ -47,102 +47,75 @@ function resultSummary(name: string, output: string): string {
   return lines[0]?.slice(0, 100) ?? "";
 }
 
-// ─── Status indicators ─────────────────────────────────────────
-function StatusRunning() {
-  return (
-    <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
-      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-blue opacity-50" />
-      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent-blue" />
-    </span>
-  );
-}
-
-function StatusComplete() {
-  return (
-    <span className="flex-shrink-0 text-accent-green text-xs">✓</span>
-  );
-}
-
-function StatusError() {
-  return <span className="w-2 h-2 bg-accent-red rounded-full flex-shrink-0" />;
-}
-
-function StatusDot({ status }: { status: string }) {
-  if (status === "running") return <StatusRunning />;
-  if (status === "error") return <StatusError />;
-  if (status === "complete") return <StatusComplete />;
-  return null;
-}
-
 // ─── Main TreeNode ─────────────────────────────────────────────
-export function TreeNode({ event, children, defaultExpanded = true, isLatest = false }: {
+export function TreeNode({ event, children, depth = 0, isLatest = false, hasChildren = false }: {
   event: StreamEvent;
   children?: React.ReactNode;
-  defaultExpanded?: boolean;
+  depth?: number;
   isLatest?: boolean;
+  hasChildren?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expanded, setExpanded] = useState(true);
   const data = event.data ?? {};
-  const hasChildren = !!children;
   const isRunning = event.status === "running";
-  const showPulse = isLatest && isRunning;
-
-  useEffect(() => { setExpanded(defaultExpanded); }, [defaultExpanded]);
-  useEffect(() => {
-    if (event.type.startsWith("flag-") || event.type === "task-error" || event.type === "task-complete") {
-      setExpanded(true);
-    }
-  }, [event.type]);
+  const isSubagent = event.type === "subagent-spawn" || event.type === "subagent-return";
 
   // ─── Render by event type ──────────────────────────────────
-
-  // Agent Thinking / Response — inline text block
-  if (event.type === "agent-response" || event.type === "agent-think") {
-    const text = data.content ?? "";
-    return (
-      <div className={`my-2 ${showPulse ? "animate-pulse-subtle" : ""}`}>
-        <div className="flex items-start gap-2" style={{ paddingLeft: `${event.depth * 16}px` }}>
-          <span className="text-accent-purple flex-shrink-0 mt-0.5">🧠</span>
-          <p className="text-xs text-text-primary leading-relaxed whitespace-pre-wrap">
-            {text.slice(0, 500)}{text.length > 500 ? "…" : ""}
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   // Agent Start
   if (event.type === "agent-start") {
     return (
-      <div className="my-2 flex items-center gap-2" style={{ paddingLeft: `${event.depth * 16}px` }}>
+      <div className="flex items-center gap-2 py-1" style={{ paddingLeft: `${depth * 20}px` }}>
         <span className="text-accent-blue">▶</span>
         <span className="text-xs text-accent-blue font-medium">Agent started</span>
-        {isRunning && <StatusDot status="running" />}
+        {isRunning && <StatusRunning />}
       </div>
     );
   }
 
-  // Tool Call — single line with tool name and params
+  // Agent Thinking — inline text
+  if (event.type === "agent-response" || event.type === "agent-think") {
+    const text = data.content ?? "";
+    return (
+      <div className={`flex items-start gap-2 py-1 ${isLatest ? "animate-pulse-subtle" : ""}`}
+        style={{ paddingLeft: `${depth * 20}px` }}>
+        <span className="text-accent-purple flex-shrink-0 mt-0.5">🧠</span>
+        <p className="text-xs text-text-primary leading-relaxed whitespace-pre-wrap">
+          {text.slice(0, 300)}{text.length > 300 ? "…" : ""}
+        </p>
+      </div>
+    );
+  }
+
+  // Tool Call
   if (event.type === "tool-call") {
     const toolName = data.toolName ?? "unknown";
     const tool = TOOL_DISPLAY[toolName] ?? { icon: "🔧", color: "text-accent-blue", label: toolName };
     const summary = toolSummary(toolName, data.toolInput);
 
     return (
-      <div className={`my-0.5 ${isRunning ? "animate-pulse-subtle" : ""}`}>
+      <div>
         <div
-          className={`flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-bg-elevated transition-colors ${
-            isRunning ? "bg-accent-blue/5 border-l-2 border-accent-blue" : "opacity-80"
+          className={`flex items-center gap-2 py-1 cursor-pointer hover:bg-bg-elevated rounded px-1 transition-colors ${
+            isRunning ? "bg-accent-blue/5 border-l-2 border-accent-blue" : ""
           }`}
-          style={{ paddingLeft: `${event.depth * 16 + 4}px` }}
+          style={{ paddingLeft: `${depth * 20}px` }}
           onClick={() => setExpanded(prev => !prev)}
         >
-          <span className="text-xs text-text-secondary/40 w-3">{expanded ? "▾" : "▸"}</span>
-          <StatusDot status={event.status} />
+          {hasChildren ? (
+            <span className="w-4 text-text-secondary/50 text-xs flex-shrink-0 text-center">
+              {expanded ? "▾" : "▸"}
+            </span>
+          ) : (
+            <span className="w-4" />
+          )}
+          {isRunning ? <StatusRunning /> : <StatusComplete />}
           <span className="text-sm flex-shrink-0">{tool.icon}</span>
-          <span className={`text-xs font-medium ${isRunning ? tool.color : "text-text-secondary"}`}>{tool.label}:</span>
+          <span className={`text-xs font-medium ${tool.color}`}>{tool.label}:</span>
           <span className="text-xs text-text-secondary/70 truncate font-mono">{summary}</span>
         </div>
+
+        {/* Expanded content */}
         {expanded && (
           <div className="ml-8 my-1">
             <pre className="text-xs p-2 rounded bg-bg-elevated border border-border overflow-auto max-h-[400px] whitespace-pre-wrap break-words font-mono text-text-secondary">
@@ -150,14 +123,18 @@ export function TreeNode({ event, children, defaultExpanded = true, isLatest = f
             </pre>
           </div>
         )}
+
+        {/* Children (sub-nodes) */}
         {expanded && hasChildren && (
-          <div className="border-l border-border/20 ml-6">{children}</div>
+          <div className="border-l border-border/20 ml-5">
+            {children}
+          </div>
         )}
       </div>
     );
   }
 
-  // Tool Result — concise summary line
+  // Tool Result
   if (event.type === "tool-result") {
     const toolName = data.toolName ?? "unknown";
     const output = data.toolOutput ?? data.error ?? "";
@@ -165,18 +142,25 @@ export function TreeNode({ event, children, defaultExpanded = true, isLatest = f
     const summary = isError ? `❌ ${data.error}` : resultSummary(toolName, output);
 
     return (
-      <div className="my-0.5">
+      <div>
         <div
-          className="flex items-center gap-2 py-0.5 px-2 rounded cursor-pointer hover:bg-bg-elevated transition-colors"
-          style={{ paddingLeft: `${event.depth * 16 + 4}px` }}
+          className="flex items-center gap-2 py-0.5 cursor-pointer hover:bg-bg-elevated rounded px-1 transition-colors"
+          style={{ paddingLeft: `${depth * 20 + 16}px` }}
           onClick={() => setExpanded(prev => !prev)}
         >
-          <span className="text-xs text-text-secondary/40 w-3">{expanded ? "▾" : "▸"}</span>
+          {hasChildren ? (
+            <span className="w-4 text-text-secondary/50 text-xs flex-shrink-0 text-center">
+              {expanded ? "▾" : "▸"}
+            </span>
+          ) : (
+            <span className="w-4" />
+          )}
           <span className="text-sm flex-shrink-0">{isError ? "❌" : "✅"}</span>
           <span className={`text-xs ${isError ? "text-accent-red" : "text-accent-green"}`}>
             {summary}
           </span>
         </div>
+
         {expanded && (
           <div className="ml-8 my-1">
             <pre className="text-xs p-2 rounded bg-bg-elevated border border-border overflow-auto max-h-[400px] whitespace-pre-wrap break-words font-mono text-text-secondary">
@@ -188,11 +172,60 @@ export function TreeNode({ event, children, defaultExpanded = true, isLatest = f
     );
   }
 
-  // Flag Found — highlighted banner
+  // Subagent Spawn
+  if (event.type === "subagent-spawn") {
+    return (
+      <div>
+        <div
+          className="flex items-center gap-2 py-1 cursor-pointer hover:bg-bg-elevated rounded px-1"
+          style={{ paddingLeft: `${depth * 20}px` }}
+          onClick={() => setExpanded(prev => !prev)}
+        >
+          {hasChildren ? (
+            <span className="w-4 text-text-secondary/50 text-xs flex-shrink-0 text-center">
+              {expanded ? "▾" : "▸"}
+            </span>
+          ) : (
+            <span className="w-4" />
+          )}
+          <StatusRunning />
+          <span className="text-sm">🤖</span>
+          <span className="text-xs font-medium text-accent-orange">
+            Task: {data.subagentType ?? "general-purpose"}
+          </span>
+          <span className="text-xs text-text-secondary truncate">
+            {data.content?.slice(0, 80)}
+          </span>
+        </div>
+
+        {expanded && hasChildren && (
+          <div className="border-l border-border/20 ml-5">
+            {children}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Subagent Return
+  if (event.type === "subagent-return") {
+    return (
+      <div className="flex items-center gap-2 py-1" style={{ paddingLeft: `${depth * 20}px` }}>
+        <span className="w-4" />
+        <span className="text-sm">↩️</span>
+        <span className="text-xs text-accent-purple">Subagent returned</span>
+        {data.content && (
+          <span className="text-xs text-text-secondary truncate">{data.content.slice(0, 80)}</span>
+        )}
+      </div>
+    );
+  }
+
+  // Flag Found
   if (event.type === "flag-found") {
     return (
       <div className="my-2 mx-2 px-3 py-2 bg-accent-green/10 border border-accent-green/30 rounded-lg"
-        style={{ marginLeft: `${event.depth * 16}px` }}>
+        style={{ marginLeft: `${depth * 20}px` }}>
         <div className="flex items-center gap-2">
           <span className="text-lg">🏁</span>
           <span className="text-accent-green font-bold text-sm">Flag Found!</span>
@@ -208,7 +241,7 @@ export function TreeNode({ event, children, defaultExpanded = true, isLatest = f
     return (
       <div className={`my-2 mx-2 px-3 py-2 rounded-lg ${
         isComplete ? "bg-accent-green/10 border border-accent-green/30" : "bg-accent-red/10 border border-accent-red/30"
-      }`} style={{ marginLeft: `${event.depth * 16}px` }}>
+      }`} style={{ marginLeft: `${depth * 20}px` }}>
         <div className="flex items-center gap-2">
           <span className="text-lg">{isComplete ? "🎉" : "💥"}</span>
           <span className={`font-bold text-sm ${isComplete ? "text-accent-green" : "text-accent-red"}`}>
@@ -228,7 +261,7 @@ export function TreeNode({ event, children, defaultExpanded = true, isLatest = f
   if (event.type === "rabbit-hole-escape") {
     return (
       <div className="my-2 mx-2 px-3 py-2 bg-accent-orange/10 border border-accent-orange/30 rounded-lg"
-        style={{ marginLeft: `${event.depth * 16}px` }}>
+        style={{ marginLeft: `${depth * 20}px` }}>
         <div className="flex items-center gap-2">
           <span>🐰</span>
           <span className="text-accent-orange font-medium text-xs">Pivot</span>
@@ -243,7 +276,7 @@ export function TreeNode({ event, children, defaultExpanded = true, isLatest = f
   if (!text && !hasChildren) return null;
 
   return (
-    <div className="my-0.5" style={{ paddingLeft: `${event.depth * 16}px` }}>
+    <div style={{ paddingLeft: `${depth * 20}px` }}>
       {text && (
         <div className="flex items-start gap-2 py-0.5 px-2">
           <span className="text-xs text-text-secondary">•</span>
@@ -254,5 +287,21 @@ export function TreeNode({ event, children, defaultExpanded = true, isLatest = f
         <div className="border-l border-border/20 ml-3">{children}</div>
       )}
     </div>
+  );
+}
+
+// ─── Status indicators ─────────────────────────────────────────
+function StatusRunning() {
+  return (
+    <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-blue opacity-50" />
+      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-accent-blue" />
+    </span>
+  );
+}
+
+function StatusComplete() {
+  return (
+    <span className="flex-shrink-0 text-accent-green text-xs">✓</span>
   );
 }

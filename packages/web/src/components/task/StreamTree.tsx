@@ -3,7 +3,7 @@ import { useStreamStore } from "../../stores/streamStore.js";
 import { TreeNode } from "./TreeNode.js";
 import type { StreamEvent } from "@deeppen/shared";
 
-const RECENT_COUNT = 10;
+const RECENT_COUNT = 15;
 
 export function StreamTree() {
   const events = useStreamStore((s) => s.events);
@@ -49,21 +49,21 @@ export function StreamTree() {
           {showHistory && (
             <div className="opacity-70">
               {historyRoots.map((event) => (
-                <EventNode key={event.id} event={event} childMap={childMap} defaultExpanded={false} isLatest={false} />
+                <EventNode key={event.id} event={event} childMap={childMap} depth={0} isLatest={false} />
               ))}
             </div>
           )}
         </div>
       )}
 
-      {/* Recent events — collapsed, latest has animation */}
+      {/* Recent events — expanded with tree structure */}
       <div>
         {recentRoots.map((event) => (
           <EventNode
             key={event.id}
             event={event}
             childMap={childMap}
-            defaultExpanded={false}
+            depth={0}
             isLatest={event.id === latestRootId}
           />
         ))}
@@ -72,18 +72,28 @@ export function StreamTree() {
   );
 }
 
-function EventNode({ event, childMap, defaultExpanded, isLatest }: {
+function EventNode({ event, childMap, depth, isLatest }: {
   event: StreamEvent;
   childMap: Map<string | null, StreamEvent[]>;
-  defaultExpanded: boolean;
+  depth: number;
   isLatest: boolean;
 }) {
   const children = childMap.get(event.id) ?? [];
+  const hasChildren = children.length > 0;
+
   return (
-    <TreeNode event={event} defaultExpanded={defaultExpanded} isLatest={isLatest}>
-      {children.map((child) => (
-        <EventNode key={child.id} event={child} childMap={childMap} defaultExpanded={defaultExpanded} isLatest={false} />
-      ))}
-    </TreeNode>
+    <div>
+      <TreeNode event={event} depth={depth} isLatest={isLatest} hasChildren={hasChildren}>
+        {hasChildren && children.map((child) => (
+          <EventNode
+            key={child.id}
+            event={child}
+            childMap={childMap}
+            depth={depth + 1}
+            isLatest={false}
+          />
+        ))}
+      </TreeNode>
+    </div>
   );
 }
