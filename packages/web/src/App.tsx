@@ -12,6 +12,7 @@ import { ConnectorConfig } from "./pages/ConnectorConfig.js";
 import { Writeups } from "./pages/Writeups.js";
 import { Chat } from "./pages/Chat.js";
 import { Settings } from "./pages/Settings.js";
+import { Kanban } from "./pages/Kanban.js";
 
 export function App() {
   return (
@@ -19,6 +20,7 @@ export function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/kanban" element={<Kanban />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/tasks/new" element={<TaskCreate />} />
           <Route path="/tasks/:id" element={<TaskDetail />} />
