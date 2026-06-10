@@ -473,12 +473,9 @@ export class TaskManager extends EventEmitter {
     // Validate flag — reject garbage/code
     if (!isValidFlag(flag)) return;
 
-    // Check if task is still running
-    const currentTask = await this.getTask(taskId);
-    if (!currentTask || currentTask.status !== "running") return;
-
     // Append flag to existing flags (multi-flag support)
-    const task = currentTask;
+    const task = await this.getTask(taskId);
+    if (!task) return;
     const existingFlags = task?.flag ? task.flag.split(",").map((f: string) => f.trim()).filter(Boolean) : [];
     if (!existingFlags.includes(flag)) {
       existingFlags.push(flag);
