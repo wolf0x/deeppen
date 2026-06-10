@@ -331,10 +331,28 @@ export class TaskManager extends EventEmitter {
       const finalFlags = finalTask?.flag ? finalTask.flag.split(",").filter(Boolean) : [];
       const flagCount = finalFlags.length;
 
+      // Check if agent explicitly confirmed all challenges solved
+      const agentConfirmedComplete = result.messages.some((m: any) =>
+        typeof m.content === "string" && m.content.includes("ALL_CHALLENGES_SOLVED")
+      );
+
+      // Determine status:
+      // - Agent confirmed ALL_CHALLENGES_SOLVED + has flags → completed
+      // - Has flags but no confirmation → stopped (partial, can retry)
+      // - No flags → failed
+      let status: string;
+      if (agentConfirmedComplete && flagCount > 0) {
+        status = "completed";
+      } else if (flagCount > 0) {
+        status = "stopped";
+      } else {
+        status = "failed";
+      }
+
       await db
         .update(tasks)
         .set({
-          status: flagCount > 0 ? "completed" : "failed",
+          status,
           completedAt: new Date(),
           elapsedMs,
           updatedAt: new Date(),
@@ -344,11 +362,13 @@ export class TaskManager extends EventEmitter {
       this.emitStreamEvent(taskId, {
         id: uuid(),
         parentId: null,
-        type: flagCount > 0 ? "task-complete" : "task-error",
+        type: status === "completed" ? "task-complete" : "task-error",
         timestamp: Date.now(),
-        data: flagCount > 0
-          ? { content: `Agent finished. ${flagCount} flag(s) found: ${finalFlags.join(", ")}` }
-          : { error: "No flags found" },
+        data: status === "completed"
+          ? { content: `All challenges solved! ${flagCount} flag(s) found: ${finalFlags.join(", ")}` }
+          : status === "stopped"
+            ? { content: `Agent stopped. ${flagCount} flag(s) found so far: ${finalFlags.join(", ")}` }
+            : { error: "No flags found" },
         status: "complete",
         depth: 0,
       });
