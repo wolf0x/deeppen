@@ -8,6 +8,7 @@ import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createStreamEmitterMiddleware } from "../middleware/streamEmitter.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
+import { createFixToolCallFormatMiddleware } from "../middleware/fixToolCallFormat.js";
 import { DockerBackend } from "../backends/docker.js";
 import { LocalBackend } from "../backends/local.js";
 import { createWebFetchTool } from "../tools/web_fetch.js";
@@ -256,6 +257,8 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     // Enable default general-purpose subagent — it handles complex sub-tasks
     generalPurposeAgent: true,
     middleware: [
+      // Fix tool calls embedded in content field (mimo-v2.5-pro compatibility)
+      createFixToolCallFormatMiddleware(),
       taskTimeoutMiddleware,
       // Stream events — the ONLY source of tool/model activity events
       createStreamEmitterMiddleware({
