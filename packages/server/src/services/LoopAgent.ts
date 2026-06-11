@@ -250,13 +250,29 @@ export class LoopAgent {
       ? (Date.now() - lastEvent.timestamp) / 60000
       : 999;
 
-    // Detect error patterns
+    // Detect error patterns from events
     let errorPattern: string | null = null;
+    const recentErrors = events
+      .filter((e: any) => e.type === "tool-result" && e.dataJson?.includes('"error"'))
+      .slice(0, 3);
+
     if (task.error) {
       if (task.error.includes("timeout")) errorPattern = "timeout";
       else if (task.error.includes("UNIQUE constraint")) errorPattern = "db_constraint";
       else errorPattern = "unknown_error";
+    } else if (recentErrors.length > 0) {
+      errorPattern = "tool_errors";
     }
+
+    // Check for repeated tool calls (potential loop)
+    const recentToolCalls = events
+      .filter((e: any) => e.type === "tool-call")
+      .slice(0, 10);
+    const toolNames = recentToolCalls.map((e: any) => {
+      try { return JSON.parse(e.dataJson).toolName; } catch { return ""; }
+    });
+    const uniqueTools = new Set(toolNames);
+    const isLooping = toolNames.length >= 5 && uniqueTools.size <= 2;
 
     // Check for stale (no events in threshold)
     const isStale = minutesSinceLastEvent > this.config.staleThresholdMinutes;
@@ -268,10 +284,13 @@ export class LoopAgent {
     if (task.status === "running" && isStale) {
       recommendation = "retry";
       reason = `Task stale for ${Math.round(minutesSinceLastEvent)} minutes. No recent activity.`;
+    } else if (task.status === "running" && isLooping) {
+      recommendation = "optimize";
+      reason = `Agent appears stuck in a loop. Last 10 tool calls: ${[...uniqueTools].join(", ")}`;
     } else if (task.status === "stopped" && flagCount > 0) {
       recommendation = "optimize";
       reason = `Partial progress: ${flagCount} flags found. May benefit from focused retry.`;
-    } else if (task.status === "failed" && flagCount === 0) {
+    } else if ((task.status === "error" || task.status === "stopped") && flagCount === 0) {
       recommendation = "retry";
       reason = "No flags found. Simple retry may succeed with different approach.";
     }
@@ -290,15 +309,88 @@ export class LoopAgent {
   }
 
   private async getDecisions(analyses: TaskAnalysis[]): Promise<TaskAnalysis[]> {
-    // For now, use simple heuristic decisions
-    // TODO: Use LLM for more sophisticated analysis
+    // Use LLM to analyze failures and generate optimized prompts
+    const modelConfig = await this.configStore.listModels().then(models => models[0]).catch(() => null);
+    if (!modelConfig) {
+      console.log("[LoopAgent] No model configured, using heuristic decisions");
+      return this.getHeuristicDecisions(analyses);
+    }
+
+    try {
+      const { createChatModel } = await import("./AgentRunner.js");
+      const model = createChatModel(modelConfig);
+
+      // Build analysis summary for LLM
+      const analysisSummary = analyses.map(a => `
+Task: ${a.taskName} (${a.taskId})
+Status: ${a.status}
+Flags: ${a.flagCount}
+Last activity: ${a.minutesSinceLastEvent} min ago
+Error: ${a.errorPattern ?? "none"}
+Current recommendation: ${a.recommendation}
+Reason: ${a.reason}
+`).join("\n---\n");
+
+      const prompt = `${LOOP_SYSTEM_PROMPT}
+
+## Tasks to Analyze
+${analysisSummary}
+
+Respond with a JSON array of decisions. Each decision must have: task_id, action (retry/optimize/skip), reason, optimized_context (if action=optimize).`;
+
+      const response = await model.invoke([
+        { role: "system", content: LOOP_SYSTEM_PROMPT },
+        { role: "user", content: analysisSummary },
+      ]);
+
+      const responseText = typeof response.content === "string"
+        ? response.content
+        : JSON.stringify(response.content);
+
+      // Parse LLM response
+      const decisions = this.parseDecisions(responseText, analyses);
+      if (decisions.length > 0) {
+        return decisions;
+      }
+    } catch (err: any) {
+      console.error("[LoopAgent] LLM analysis failed:", err.message);
+    }
+
+    // Fallback to heuristic decisions
+    return this.getHeuristicDecisions(analyses);
+  }
+
+  private getHeuristicDecisions(analyses: TaskAnalysis[]): TaskAnalysis[] {
     return analyses.map(analysis => {
       if (analysis.recommendation === "optimize" && this.config.autoOptimize) {
-        // Generate optimized context based on analysis
         analysis.optimizedContext = this.generateOptimizedContext(analysis);
       }
       return analysis;
     });
+  }
+
+  private parseDecisions(responseText: string, analyses: TaskAnalysis[]): TaskAnalysis[] {
+    try {
+      // Extract JSON array from response
+      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return [];
+
+      const decisions = JSON.parse(jsonMatch[0]);
+      return analyses.map(analysis => {
+        const decision = decisions.find((d: any) => d.task_id === analysis.taskId);
+        if (decision) {
+          return {
+            ...analysis,
+            recommendation: decision.action ?? analysis.recommendation,
+            reason: decision.reason ?? analysis.reason,
+            optimizedContext: decision.optimized_context ?? undefined,
+          };
+        }
+        return analysis;
+      });
+    } catch {
+      return [];
+    }
   }
 
   private generateOptimizedContext(analysis: TaskAnalysis): string {
