@@ -14,6 +14,7 @@ interface LoopConfig {
   maxRetries: number;
   staleThresholdMinutes: number;
   autoOptimize: boolean;
+  modelConfigId: string;
 }
 
 const DEFAULTS: Settings = {
@@ -29,12 +30,14 @@ const LOOP_DEFAULTS: LoopConfig = {
   maxRetries: 3,
   staleThresholdMinutes: 10,
   autoOptimize: true,
+  modelConfigId: "",
 };
 
 export function Settings() {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [loopConfig, setLoopConfig] = useState<LoopConfig>(LOOP_DEFAULTS);
   const [loopStatus, setLoopStatus] = useState<any>(null);
+  const [models, setModels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -42,13 +45,15 @@ export function Settings() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, loop] = await Promise.all([
+      const [data, loop, modelsList] = await Promise.all([
         api.getSettings(),
         api.getLoopStatus().catch(() => ({ config: LOOP_DEFAULTS })),
+        api.listModels().catch(() => []),
       ]);
       setSettings({ ...DEFAULTS, ...data });
       setLoopConfig({ ...LOOP_DEFAULTS, ...loop.config });
       setLoopStatus(loop);
+      setModels(modelsList);
     } catch {
       // Use defaults
     } finally {
@@ -139,6 +144,18 @@ export function Settings() {
             </Field>
             <Field label="Auto-Optimize" desc="Automatically optimize prompts for failed tasks">
               <Toggle checked={loopConfig.autoOptimize} onChange={v => updateLoop("autoOptimize", v)} />
+            </Field>
+            <Field label="Model" desc="Model for Loop Agent analysis (default: first available)">
+              <select
+                value={loopConfig.modelConfigId}
+                onChange={e => updateLoop("modelConfigId", e.target.value)}
+                className="w-full px-3 py-2 bg-bg-elevated border border-border rounded text-sm text-text-primary focus:border-accent-blue focus:outline-none"
+              >
+                <option value="">Default (first available)</option>
+                {models.map((m: any) => (
+                  <option key={m.id} value={m.id}>{m.name} ({m.provider})</option>
+                ))}
+              </select>
             </Field>
 
             {/* Loop Status */}

@@ -11,6 +11,7 @@ interface LoopConfig {
   maxRetries: number;
   staleThresholdMinutes: number;
   autoOptimize: boolean;
+  modelConfigId: string;
 }
 
 interface TaskAnalysis {
@@ -73,6 +74,7 @@ export class LoopAgent {
     maxRetries: 3,
     staleThresholdMinutes: 10,
     autoOptimize: true,
+    modelConfigId: "",
   };
   private timer: ReturnType<typeof setInterval> | null = null;
   private isRunning = false;
@@ -310,7 +312,14 @@ export class LoopAgent {
 
   private async getDecisions(analyses: TaskAnalysis[]): Promise<TaskAnalysis[]> {
     // Use LLM to analyze failures and generate optimized prompts
-    const modelConfig = await this.configStore.listModels().then(models => models[0]).catch(() => null);
+    let modelConfig = null;
+    if (this.config.modelConfigId) {
+      modelConfig = await this.configStore.getModelWithKey(this.config.modelConfigId).catch(() => null);
+    }
+    if (!modelConfig) {
+      // Fallback to first available model
+      modelConfig = await this.configStore.listModels().then(models => models[0]).catch(() => null);
+    }
     if (!modelConfig) {
       console.log("[LoopAgent] No model configured, using heuristic decisions");
       return this.getHeuristicDecisions(analyses);
