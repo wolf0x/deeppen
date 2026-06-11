@@ -27,45 +27,43 @@ interface TaskAnalysis {
   optimizedContext?: string;
 }
 
-const LOOP_SYSTEM_PROMPT = `You are DeepPen's Loop Agent — a task optimization reviewer.
+const LOOP_SYSTEM_PROMPT = `You are DeepPen's Loop Agent — a CTF task optimization expert.
 
 ## Your Job
-Analyze CTF task execution data and decide how to handle stopped/failed tasks.
+Analyze CTF task execution data, understand what the agent was doing, what went wrong, and provide specific guidance to help it succeed.
 
-## Analysis
-For each task, determine:
-1. Why did it stop/fail? (timeout, error, no progress)
-2. What was accomplished? (flags found, challenges solved)
-3. What should happen next? (retry, optimize prompt, skip)
+## Analysis Steps
+1. **Understand the challenge**: Read the challenge description and goal
+2. **Review agent activity**: What tools were called? What results were returned?
+3. **Identify the problem**: Why did the agent stop/fail/loop?
+4. **Provide specific guidance**: Based on the actual execution data, suggest concrete next steps
+
+## Problem Patterns to Detect
+- **Loop**: Agent repeating same commands → suggest different approach
+- **Wrong tool**: Agent using wrong tool → suggest correct tool
+- **Missing step**: Agent skipped a step → point out what's missing
+- **Wrong target**: Agent hitting wrong endpoint → suggest correct target
+- **Authentication**: Agent failing auth → suggest how to get credentials
+- **Dead end**: Agent exhausted current approach → suggest alternative attack vector
 
 ## Output
-Respond with a JSON array of decisions:
+Respond with a JSON array:
 [
   {
     "task_id": "...",
-    "action": "retry",
-    "reason": "Task hit time limit but made progress. Simple retry may succeed.",
-    "optimized_context": null
-  },
-  {
-    "task_id": "...",
     "action": "optimize",
-    "reason": "Agent was stuck on SQL injection. Suggest trying XSS instead.",
-    "optimized_context": "Previous attempt failed on SQL injection. Focus on XSS attacks on the search parameter. Try: <script>alert(1)</script>"
-  },
-  {
-    "task_id": "...",
-    "action": "skip",
-    "reason": "Task has no flags and no progress after 3 attempts.",
-    "optimized_context": null
+    "reason": "Clear explanation of what went wrong",
+    "optimized_context": "Specific, actionable guidance for the next attempt. Include: what to try, what to avoid, specific commands or techniques."
   }
 ]
 
 ## Rules
-- Only recommend "optimize" if you can identify a specific improvement
-- Only recommend "retry" if the task made some progress
-- Recommend "skip" if the task is hopeless (3+ failures, no progress)
-- Keep optimized_context concise and actionable`;
+- Be SPECIFIC — reference actual tool calls and results from the data
+- Be ACTIONABLE — provide concrete commands, URLs, techniques
+- Be CONCISE — optimized_context should be 2-5 sentences max
+- If the agent made good progress but timed out, recommend "retry" with null context
+- If the agent is completely stuck, recommend "optimize" with detailed guidance
+- If the task has been retried 3+ times with no progress, recommend "skip"`;
 
 export class LoopAgent {
   private config: LoopConfig = {
@@ -252,12 +250,44 @@ export class LoopAgent {
       ? (Date.now() - lastEvent.timestamp) / 60000
       : 999;
 
-    // Detect error patterns from events
-    let errorPattern: string | null = null;
-    const recentErrors = events
-      .filter((e: any) => e.type === "tool-result" && e.dataJson?.includes('"error"'))
-      .slice(0, 3);
+    // Extract detailed context from events
+    const recentToolCalls = events.filter((e: any) => e.type === "tool-call").slice(0, 10);
+    const recentResults = events.filter((e: any) => e.type === "tool-result").slice(0, 10);
+    const recentResponses = events.filter((e: any) => e.type === "agent-response").slice(0, 3);
+    const recentErrors = events.filter((e: any) => {
+      if (e.type !== "tool-result") return false;
+      try { const d = JSON.parse(e.dataJson); return d.error || (d.toolOutput && d.toolOutput.includes("Error")); } catch { return false; }
+    }).slice(0, 5);
 
+    // Build context summary for LLM
+    const toolCallsSummary = recentToolCalls.map((e: any) => {
+      try {
+        const d = JSON.parse(e.dataJson);
+        const input = d.toolInput?.command || d.toolInput?.url || JSON.stringify(d.toolInput ?? {}).slice(0, 100);
+        return `${d.toolName}: ${input}`;
+      } catch { return "unknown"; }
+    });
+
+    const resultsSummary = recentResults.map((e: any) => {
+      try {
+        const d = JSON.parse(e.dataJson);
+        return `${d.toolName}: ${(d.toolOutput ?? "").slice(0, 200)}`;
+      } catch { return "unknown"; }
+    });
+
+    const responsesSummary = recentResponses.map((e: any) => {
+      try { return JSON.parse(e.dataJson).content?.slice(0, 300) ?? ""; } catch { return ""; }
+    }).filter(Boolean);
+
+    const errorsSummary = recentErrors.map((e: any) => {
+      try {
+        const d = JSON.parse(e.dataJson);
+        return `${d.toolName}: ${(d.toolOutput ?? d.error ?? "").slice(0, 200)}`;
+      } catch { return ""; }
+    }).filter(Boolean);
+
+    // Detect error patterns
+    let errorPattern: string | null = null;
     if (task.error) {
       if (task.error.includes("timeout")) errorPattern = "timeout";
       else if (task.error.includes("UNIQUE constraint")) errorPattern = "db_constraint";
@@ -267,16 +297,13 @@ export class LoopAgent {
     }
 
     // Check for repeated tool calls (potential loop)
-    const recentToolCalls = events
-      .filter((e: any) => e.type === "tool-call")
-      .slice(0, 10);
     const toolNames = recentToolCalls.map((e: any) => {
       try { return JSON.parse(e.dataJson).toolName; } catch { return ""; }
     });
     const uniqueTools = new Set(toolNames);
     const isLooping = toolNames.length >= 5 && uniqueTools.size <= 2;
 
-    // Check for stale (no events in threshold)
+    // Check for stale
     const isStale = minutesSinceLastEvent > this.config.staleThresholdMinutes;
 
     // Determine recommendation
@@ -285,16 +312,16 @@ export class LoopAgent {
 
     if (task.status === "running" && isStale) {
       recommendation = "retry";
-      reason = `Task stale for ${Math.round(minutesSinceLastEvent)} minutes. No recent activity.`;
+      reason = `Task stale for ${Math.round(minutesSinceLastEvent)} minutes.`;
     } else if (task.status === "running" && isLooping) {
       recommendation = "optimize";
-      reason = `Agent appears stuck in a loop. Last 10 tool calls: ${[...uniqueTools].join(", ")}`;
+      reason = `Agent stuck in loop. Tools: ${[...uniqueTools].join(", ")}`;
     } else if (task.status === "stopped" && flagCount > 0) {
       recommendation = "optimize";
-      reason = `Partial progress: ${flagCount} flags found. May benefit from focused retry.`;
+      reason = `Partial progress: ${flagCount} flags found.`;
     } else if ((task.status === "error" || task.status === "stopped") && flagCount === 0) {
       recommendation = "retry";
-      reason = "No flags found. Simple retry may succeed with different approach.";
+      reason = "No flags found.";
     }
 
     return {
@@ -307,7 +334,17 @@ export class LoopAgent {
       errorPattern,
       recommendation,
       reason,
-    };
+      // Extra context for LLM analysis
+      _context: {
+        challengeDescription: task.challengeDescription,
+        toolCalls: toolCallsSummary,
+        results: resultsSummary,
+        responses: responsesSummary,
+        errors: errorsSummary,
+        isLooping,
+        uniqueTools: [...uniqueTools],
+      },
+    } as TaskAnalysis;
   }
 
   private async getDecisions(analyses: TaskAnalysis[]): Promise<TaskAnalysis[]> {
@@ -317,7 +354,6 @@ export class LoopAgent {
       modelConfig = await this.configStore.getModelWithKey(this.config.modelConfigId).catch(() => null);
     }
     if (!modelConfig) {
-      // Fallback to first available model
       modelConfig = await this.configStore.listModels().then(models => models[0]).catch(() => null);
     }
     if (!modelConfig) {
@@ -329,23 +365,47 @@ export class LoopAgent {
       const { createChatModel } = await import("./AgentRunner.js");
       const model = createChatModel(modelConfig);
 
-      // Build analysis summary for LLM
-      const analysisSummary = analyses.map(a => `
-Task: ${a.taskName} (${a.taskId})
-Status: ${a.status}
-Flags: ${a.flagCount}
-Last activity: ${a.minutesSinceLastEvent} min ago
-Error: ${a.errorPattern ?? "none"}
-Current recommendation: ${a.recommendation}
-Reason: ${a.reason}
-`).join("\n---\n");
+      // Build detailed analysis for LLM
+      const analysisSummary = analyses.map(a => {
+        const ctx = (a as any)._context;
+        let summary = `
+## Task: ${a.taskName} (${a.taskId})
+- Status: ${a.status}
+- Flags found: ${a.flagCount}
+- Last activity: ${a.minutesSinceLastEvent} min ago
+- Error pattern: ${a.errorPattern ?? "none"}
+- Recommendation: ${a.recommendation}
+- Reason: ${a.reason}`;
 
-      const prompt = `${LOOP_SYSTEM_PROMPT}
+        if (ctx) {
+          summary += `\n- Challenge: ${ctx.challengeDescription?.slice(0, 200) ?? "N/A"}`;
 
-## Tasks to Analyze
-${analysisSummary}
+          if (ctx.toolCalls?.length > 0) {
+            summary += `\n\n### Recent Tool Calls:`;
+            ctx.toolCalls.slice(0, 5).forEach((t: string) => { summary += `\n- ${t}`; });
+          }
 
-Respond with a JSON array of decisions. Each decision must have: task_id, action (retry/optimize/skip), reason, optimized_context (if action=optimize).`;
+          if (ctx.results?.length > 0) {
+            summary += `\n\n### Recent Results:`;
+            ctx.results.slice(0, 3).forEach((r: string) => { summary += `\n- ${r.slice(0, 150)}`; });
+          }
+
+          if (ctx.responses?.length > 0) {
+            summary += `\n\n### Agent Thinking:`;
+            ctx.responses.slice(0, 2).forEach((r: string) => { summary += `\n- ${r.slice(0, 200)}`; });
+          }
+
+          if (ctx.errors?.length > 0) {
+            summary += `\n\n### Errors:`;
+            ctx.errors.slice(0, 3).forEach((e: string) => { summary += `\n- ${e.slice(0, 150)}`; });
+          }
+
+          if (ctx.isLooping) {
+            summary += `\n\n### ⚠️ LOOP DETECTED: Agent repeating: ${ctx.uniqueTools.join(", ")}`;
+          }
+        }
+        return summary;
+      }).join("\n\n---\n\n");
 
       const response = await model.invoke([
         { role: "system", content: LOOP_SYSTEM_PROMPT },
@@ -356,7 +416,6 @@ Respond with a JSON array of decisions. Each decision must have: task_id, action
         ? response.content
         : JSON.stringify(response.content);
 
-      // Parse LLM response
       const decisions = this.parseDecisions(responseText, analyses);
       if (decisions.length > 0) {
         return decisions;
@@ -365,7 +424,6 @@ Respond with a JSON array of decisions. Each decision must have: task_id, action
       console.error("[LoopAgent] LLM analysis failed:", err.message);
     }
 
-    // Fallback to heuristic decisions
     return this.getHeuristicDecisions(analyses);
   }
 
