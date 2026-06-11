@@ -14,14 +14,19 @@ interface TaskStats {
 
 export function Kanban() {
   const [tasks, setTasks] = useState<TaskStats[]>([]);
+  const [loopStatus, setLoopStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const events = useStreamStore((s) => s.events);
 
   const refresh = useCallback(async () => {
     try {
-      const data = await api.listTasks();
+      const [data, loop] = await Promise.all([
+        api.listTasks(),
+        api.getLoopStatus().catch(() => null),
+      ]);
       setTasks(data);
+      setLoopStatus(loop);
       setLastUpdate(Date.now());
     } catch {
       // ignore
@@ -122,6 +127,60 @@ export function Kanban() {
                 </div>
               )}
             </Section>
+
+            {/* Loop Agent Status */}
+            {loopStatus && (
+              <Section title="🔄 Loop Agent" count={loopStatus.history?.length ?? 0}>
+                <div className="space-y-3">
+                  {/* Status */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${loopStatus.config?.enabled ? "bg-accent-green" : "bg-text-secondary"}`} />
+                      <span className="text-xs font-medium">
+                        {loopStatus.config?.enabled ? "Enabled" : "Disabled"}
+                      </span>
+                    </div>
+                    <span className="text-xs text-text-secondary">
+                      Every {loopStatus.config?.intervalMinutes ?? 5}min
+                    </span>
+                  </div>
+
+                  {/* Last Run */}
+                  {loopStatus.lastRun && (
+                    <div className="text-xs text-text-secondary">
+                      Last run: {new Date(loopStatus.lastRun).toLocaleTimeString()}
+                    </div>
+                  )}
+
+                  {/* Run History */}
+                  {loopStatus.history?.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-text-secondary">Recent runs:</p>
+                      {loopStatus.history.slice(-5).reverse().map((run: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between text-xs px-2 py-1 bg-bg-elevated rounded">
+                          <span className="text-text-secondary">
+                            {new Date(run.time).toLocaleTimeString()}
+                          </span>
+                          <span className="text-text-primary">
+                            {run.analyzed} analyzed
+                          </span>
+                          {Object.entries(run.actions).length > 0 && (
+                            <span className="text-accent-blue">
+                              {Object.entries(run.actions).map(([k, v]) => `${k}:${v}`).join(", ")}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No history */}
+                  {(!loopStatus.history || loopStatus.history.length === 0) && (
+                    <Empty text="No runs yet" />
+                  )}
+                </div>
+              </Section>
+            )}
           </div>
         </div>
       </div>
