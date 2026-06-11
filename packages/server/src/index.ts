@@ -18,6 +18,8 @@ import { createWriteupRoutes } from "./routes/writeups.js";
 import { ChatService } from "./services/ChatService.js";
 import { createChatRoutes } from "./routes/chat.js";
 import { createSettingsRoutes } from "./routes/settings.js";
+import { LoopAgent } from "./services/LoopAgent.js";
+import { createLoopRoutes } from "./routes/loop.js";
 
 const PORT = parseInt(process.env.PORT ?? "4000");
 const app: any = express();
@@ -33,6 +35,10 @@ const apiConnector = new APIConnector();
 const containerManager = new ContainerManager();
 const writeupGenerator = new WriteupGenerator();
 const chatService = new ChatService(configStore, taskManager);
+const loopAgent = new LoopAgent(configStore, taskManager);
+
+// Start Loop Agent
+loopAgent.start();
 
 // Wire TaskManager stream events to StreamBridge
 taskManager.on("stream", (taskId: string, event: any) => {
@@ -51,6 +57,7 @@ app.use("/api/config/container", createContainerRoutes(containerManager));
 app.use("/api/writeups", createWriteupRoutes(writeupGenerator));
 app.use("/api/chat", createChatRoutes(chatService));
 app.use("/api/settings", createSettingsRoutes());
+app.use("/api/loop", createLoopRoutes(loopAgent));
 
 // Start server
 app.listen(PORT, () => {

@@ -94,4 +94,9 @@ export const api = {
   // Settings
   getSettings: () => request<any>("/settings"),
   updateSettings: (settings: any) => request<any>("/settings", { method: "PUT", body: JSON.stringify(settings) }),
+
+  // Loop Agent
+  getLoopStatus: () => request<any>("/loop/status"),
+  updateLoopConfig: (config: any) => request<any>("/loop/config", { method: "PUT", body: JSON.stringify(config) }),
+  triggerLoop: () => request<any>("/loop/run", { method: "POST" }),
 };

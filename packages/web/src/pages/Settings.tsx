@@ -8,6 +8,14 @@ interface Settings {
   pivotStrategy: "different-approach" | "ask-user" | "stop";
 }
 
+interface LoopConfig {
+  enabled: boolean;
+  intervalMinutes: number;
+  maxRetries: number;
+  staleThresholdMinutes: number;
+  autoOptimize: boolean;
+}
+
 const DEFAULTS: Settings = {
   maxIterations: 100,
   maxTimeMinutes: 30,
@@ -15,8 +23,18 @@ const DEFAULTS: Settings = {
   pivotStrategy: "different-approach",
 };
 
+const LOOP_DEFAULTS: LoopConfig = {
+  enabled: false,
+  intervalMinutes: 10,
+  maxRetries: 3,
+  staleThresholdMinutes: 10,
+  autoOptimize: true,
+};
+
 export function Settings() {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
+  const [loopConfig, setLoopConfig] = useState<LoopConfig>(LOOP_DEFAULTS);
+  const [loopStatus, setLoopStatus] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -24,8 +42,13 @@ export function Settings() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getSettings();
+      const [data, loop] = await Promise.all([
+        api.getSettings(),
+        api.getLoopStatus().catch(() => ({ config: LOOP_DEFAULTS })),
+      ]);
       setSettings({ ...DEFAULTS, ...data });
+      setLoopConfig({ ...LOOP_DEFAULTS, ...loop.config });
+      setLoopStatus(loop);
     } catch {
       // Use defaults
     } finally {
@@ -39,7 +62,10 @@ export function Settings() {
     setSaving(true);
     setSaved(false);
     try {
-      await api.updateSettings(settings);
+      await Promise.all([
+        api.updateSettings(settings),
+        api.updateLoopConfig(loopConfig),
+      ]);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -49,6 +75,10 @@ export function Settings() {
 
   const update = (key: keyof Settings, value: any) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const updateLoop = (key: keyof LoopConfig, value: any) => {
+    setLoopConfig(prev => ({ ...prev, [key]: value }));
   };
 
   if (loading) return <div className="p-6 text-text-secondary">Loading...</div>;
@@ -93,21 +123,69 @@ export function Settings() {
             </Field>
           </Section>
 
+          {/* ── Loop Agent ── */}
+          <Section title="🔄 Loop Agent" desc="Automatic task optimization and retry">
+            <Field label="Enabled" desc="Enable automatic task review and optimization">
+              <Toggle checked={loopConfig.enabled} onChange={v => updateLoop("enabled", v)} />
+            </Field>
+            <Field label="Check Interval (minutes)" desc="How often to review tasks (default: 10)">
+              <NumberInput value={loopConfig.intervalMinutes} onChange={v => updateLoop("intervalMinutes", v)} min={1} max={60} />
+            </Field>
+            <Field label="Max Retries" desc="Maximum retry attempts per task (default: 3)">
+              <NumberInput value={loopConfig.maxRetries} onChange={v => updateLoop("maxRetries", v)} min={1} max={10} />
+            </Field>
+            <Field label="Stale Threshold (minutes)" desc="Consider task stuck after this many minutes (default: 10)">
+              <NumberInput value={loopConfig.staleThresholdMinutes} onChange={v => updateLoop("staleThresholdMinutes", v)} min={5} max={60} />
+            </Field>
+            <Field label="Auto-Optimize" desc="Automatically optimize prompts for failed tasks">
+              <Toggle checked={loopConfig.autoOptimize} onChange={v => updateLoop("autoOptimize", v)} />
+            </Field>
+
+            {/* Loop Status */}
+            {loopStatus && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Status</span>
+                  <button
+                    onClick={() => api.triggerLoop().then(() => setTimeout(load, 2000))}
+                    className="px-3 py-1 bg-bg-elevated border border-border rounded text-xs hover:border-accent-blue"
+                  >
+                    Run Now
+                  </button>
+                </div>
+                <div className="text-xs text-text-secondary space-y-1">
+                  <p>Running: {loopStatus.running ? "🟢 Yes" : "⚪ No"}</p>
+                  <p>Last run: {loopStatus.lastRun ? new Date(loopStatus.lastRun).toLocaleString() : "Never"}</p>
+                  {loopStatus.history?.length > 0 && (
+                    <div className="mt-2">
+                      <p className="font-medium">Recent runs:</p>
+                      {loopStatus.history.slice(-3).reverse().map((h: any, i: number) => (
+                        <p key={i} className="ml-2">
+                          {new Date(h.time).toLocaleTimeString()} — {h.analyzed} tasks, {JSON.stringify(h.actions)}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </Section>
+
           {/* ── Info ── */}
           <div className="bg-bg-surface border border-border rounded-lg p-4">
-            <h3 className="text-sm font-semibold mb-2">ℹ️ About Limits</h3>
+            <h3 className="text-sm font-semibold mb-2">ℹ️ About Settings</h3>
             <ul className="text-xs text-text-secondary space-y-1">
-              <li>• <strong>Max Iterations</strong> — how many times the LLM is called. Each call may produce tool calls.</li>
-              <li>• <strong>Max Time</strong> — hard stop after this duration, regardless of progress.</li>
-              <li>• <strong>Max Tool Calls</strong> — total tool executions (execute, web_fetch, etc.) before stopping.</li>
-              <li>• <strong>Pivot Strategy</strong> — what happens when the agent is stuck on a challenge.</li>
+              <li>• <strong>Max Iterations</strong> — how many times the LLM is called per task.</li>
+              <li>• <strong>Max Time</strong> — hard stop after this duration.</li>
+              <li>• <strong>Max Tool Calls</strong> — total tool executions before stopping.</li>
+              <li>• <strong>Loop Agent</strong> — automatically reviews stuck/failed tasks and retries with optimized prompts.</li>
             </ul>
           </div>
 
           {/* ── Reset ── */}
           <div className="pt-4 border-t border-border">
             <button
-              onClick={() => setSettings(DEFAULTS)}
+              onClick={() => { setSettings(DEFAULTS); setLoopConfig(LOOP_DEFAULTS); }}
               className="px-4 py-2 bg-bg-elevated border border-border rounded text-sm text-text-secondary hover:border-accent-red hover:text-accent-red transition-colors"
             >
               Reset to Defaults
@@ -155,5 +233,20 @@ function NumberInput({ value, onChange, min, max }: { value: number; onChange: (
       onChange={e => onChange(Number(e.target.value))}
       className="w-full px-3 py-1.5 bg-bg-elevated border border-border rounded text-sm text-text-primary text-right focus:border-accent-blue focus:outline-none"
     />
+  );
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      className={`relative w-11 h-6 rounded-full transition-colors ${
+        checked ? "bg-accent-blue" : "bg-bg-elevated border border-border"
+      }`}
+    >
+      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+        checked ? "left-5" : "left-0.5"
+      }`} />
+    </button>
   );
 }

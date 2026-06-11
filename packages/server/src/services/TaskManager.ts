@@ -233,6 +233,15 @@ export class TaskManager extends EventEmitter {
     }));
   }
 
+  /**
+   * Update user context for a task (background info, hints, etc.)
+   */
+  async updateUserContext(taskId: string, context: string): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+    await db.update(tasks).set({ userContext: context, updatedAt: new Date() }).where(eq(tasks.id, taskId));
+  }
+
   // ─── Private ───────────────────────────────────────
   private async runAgentBackground(
     taskId: string,
