@@ -108,11 +108,17 @@ Before doing anything, analyze the challenge description to determine:
 Output your analysis as:
 "SINGLE-FLAG: [reason]" or "MULTI-FLAG: [reason, number of challenges if known]"
 
-## Phase 2: Execute
+## Phase 2: Read Skills
+- ALWAYS read the loaded SKILL.md files before starting
+- Skills contain proven methodologies and techniques for each challenge type
+- Follow the skill instructions step by step
+
+## Phase 3: Execute
 - Use tools step by step to investigate and exploit
 - Work systematically through each challenge
+- Follow the methodology from the loaded skills
 
-## Phase 3: Extract & Continue
+## Phase 4: Extract & Continue
 **If SINGLE-FLAG:**
 - Find the flag → output it clearly as flag{...} or CTF{...} or HTB{...}
 - After finding ONE flag, you are DONE — summarize findings and stop
@@ -181,16 +187,17 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     ? "/skills"
     : resolve(dirname(fileURLToPath(import.meta.url)), "../../../../skills");
 
-  const categorySkillMap: Record<string, string> = {
-    web: skillsRoot + "/web-security/",
-    pwn: skillsRoot + "/pwn/",
-    crypto: skillsRoot + "/bug-bounty/",
-    forensics: skillsRoot + "/bug-bounty/",
-    misc: skillsRoot + "/bug-bounty/",
-    "prompt-injection": skillsRoot + "/hunt-llm-ai/",
+  // Map challenge categories to ctf-* skills
+  const categorySkillMap: Record<string, string[]> = {
+    web: [skillsRoot + "/ctf-web/", skillsRoot + "/ctf-writeup/"],
+    pwn: [skillsRoot + "/ctf-pwn/", skillsRoot + "/ctf-writeup/"],
+    crypto: [skillsRoot + "/ctf-crypto/", skillsRoot + "/ctf-writeup/"],
+    forensics: [skillsRoot + "/ctf-forensics/", skillsRoot + "/ctf-writeup/"],
+    misc: [skillsRoot + "/ctf-misc/", skillsRoot + "/ctf-writeup/"],
+    "prompt-injection": [skillsRoot + "/ctf-ai-ml/", skillsRoot + "/ctf-writeup/"],
   };
-  const effectiveSkills = skills?.length ? skills : [categorySkillMap[category] ?? skillsRoot + "/bug-bounty/"];
-  console.log("[AgentRunner] Skills:", effectiveSkills[0]);
+  const effectiveSkills = skills?.length ? skills : (categorySkillMap[category] ?? [skillsRoot + "/ctf-misc/", skillsRoot + "/ctf-writeup/"]);
+  console.log("[AgentRunner] Skills:", effectiveSkills.join(", "));
 
   // Timeout wrapper for task tool — prevents subagent hangs
   const taskTimeoutMiddleware = createMiddleware({
