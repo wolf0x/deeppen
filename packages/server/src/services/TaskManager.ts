@@ -333,6 +333,7 @@ export class TaskManager extends EventEmitter {
         skills,
         attachments,
         containerManager: useContainer ? this.containerManager : undefined,
+        userContext: task.userContext ?? undefined,
         rabbitHole,
         abortSignal: signal,
         onStreamEvent: (event) => this.emitStreamEvent(taskId, event),

@@ -79,5 +79,18 @@ export function createTaskRoutes(taskManager: TaskManager): Router {
     }
   });
 
+  router.put("/:id/context", async (req, res) => {
+    try {
+      const { context } = req.body;
+      if (typeof context !== "string") {
+        return res.status(400).json({ error: "context must be a string" });
+      }
+      await taskManager.updateUserContext(req.params.id, context);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   return router;
 }

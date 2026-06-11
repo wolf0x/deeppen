@@ -11,6 +11,8 @@ export function TaskDetail() {
   const { task, loading, refresh } = useTask(id!);
   useSSE(id);
   const [now, setNow] = useState(Date.now());
+  const [contextInput, setContextInput] = useState("");
+  const [injecting, setInjecting] = useState(false);
 
   // Tick elapsed timer every second while task is running
   useEffect(() => {
@@ -18,6 +20,20 @@ export function TaskDetail() {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, [task?.status]);
+
+  const handleInjectContext = async () => {
+    if (!contextInput.trim() || !id) return;
+    setInjecting(true);
+    try {
+      await api.updateTaskContext(id, contextInput.trim());
+      setContextInput("");
+      refresh();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setInjecting(false);
+    }
+  };
 
   const handleGenerateWriteup = async () => {
     try {
@@ -34,6 +50,8 @@ export function TaskDetail() {
   const elapsed = task.startedAt
     ? Math.round((now - new Date(task.startedAt).getTime()) / 1000)
     : 0;
+
+  const canInject = task.status === "paused" || task.status === "stopped" || task.status === "failed";
 
   return (
     <div className="flex flex-col h-full">
@@ -71,6 +89,7 @@ export function TaskDetail() {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-auto p-4 space-y-3">
+        {/* Flags */}
         {task.flag && (
           <div className="px-5 py-4 bg-accent-green/15 border-2 border-accent-green/40 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
@@ -93,6 +112,7 @@ export function TaskDetail() {
           </div>
         )}
 
+        {/* Error */}
         {task.error && (
           <div className="px-4 py-3 bg-accent-red/10 border border-accent-red/30 rounded-lg">
             <span className="text-accent-red font-bold">{"\u{26A0}\u{FE0F}"} Error: </span>
@@ -100,6 +120,39 @@ export function TaskDetail() {
           </div>
         )}
 
+        {/* Context Injection */}
+        <div className="px-4 py-3 bg-bg-surface border border-border rounded-lg">
+          <h3 className="text-sm font-semibold mb-2">💡 Inject Context / Hints</h3>
+          <p className="text-xs text-text-secondary mb-2">
+            {canInject
+              ? "Provide background info, hints, or guidance for the agent. This will be included when the task resumes."
+              : "Pause or stop the task first to inject context."}
+          </p>
+          <div className="flex gap-2">
+            <textarea
+              value={contextInput}
+              onChange={(e) => setContextInput(e.target.value)}
+              placeholder="e.g., The login form has a hidden debug parameter. Try SQL injection on the username field..."
+              disabled={!canInject}
+              rows={3}
+              className="flex-1 px-3 py-2 bg-bg-elevated border border-border rounded text-sm text-text-primary placeholder-text-secondary/50 resize-none focus:border-accent-blue focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <button
+              onClick={handleInjectContext}
+              disabled={!canInject || !contextInput.trim() || injecting}
+              className="px-4 py-2 bg-accent-blue text-bg-primary rounded text-sm font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed self-end"
+            >
+              {injecting ? "..." : "Inject"}
+            </button>
+          </div>
+          {task.userContext && (
+            <div className="mt-2 px-3 py-2 bg-accent-blue/5 border border-accent-blue/20 rounded text-xs text-accent-blue">
+              ✓ Context injected: {task.userContext.slice(0, 100)}{task.userContext.length > 100 ? "..." : ""}
+            </div>
+          )}
+        </div>
+
+        {/* Stream Tree */}
         <StreamTree />
       </div>
     </div>

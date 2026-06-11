@@ -88,6 +88,7 @@ export interface RunAgentOptions {
   attachments?: string[];
   subagents?: SubAgent[];
   containerManager?: ContainerManager;
+  userContext?: string;
   rabbitHole?: {
     maxIterations: number;
     maxTimeMinutes: number;
@@ -291,10 +292,16 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   });
 
   // Invoke the agent — DeepAgents handles the full ReAct loop
-  console.log("[AgentRunner] Invoking agent with", challenge.length, "char challenge");
+  // Inject user context (hints, background info) into the challenge
+  let fullChallenge = challenge;
+  if (options.userContext) {
+    fullChallenge += `\n\n## User-Provided Context\n${options.userContext}`;
+  }
+
+  console.log("[AgentRunner] Invoking agent with", fullChallenge.length, "char challenge");
   try {
     const result = await agent.invoke(
-      { messages: [{ role: "user", content: challenge }] },
+      { messages: [{ role: "user", content: fullChallenge }] },
       { signal: abortSignal },
     );
     console.log("[AgentRunner] Agent completed with", result.messages.length, "messages");

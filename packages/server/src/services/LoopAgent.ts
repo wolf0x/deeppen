@@ -216,7 +216,7 @@ export class LoopAgent {
       // Check last event time
       const lastEvent = await db.select().from(streamEvents)
         .where(eq(streamEvents.taskId, task.id))
-        .orderBy(streamEvents.timestamp)
+        .orderBy(desc(streamEvents.timestamp))
         .limit(1);
       if (lastEvent.length > 0) {
         const minutesSince = (Date.now() - lastEvent[0].timestamp) / 60000;

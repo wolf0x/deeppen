@@ -43,6 +43,7 @@ export const api = {
   resumeTask: (id: string) => request<{ ok: boolean }>(`/tasks/${id}/resume`, { method: "POST" }),
   stopTask: (id: string) => request<{ ok: boolean }>(`/tasks/${id}/stop`, { method: "POST" }),
   retryTask: (id: string) => request<{ ok: boolean }>(`/tasks/${id}/retry`, { method: "POST" }),
+  updateTaskContext: (id: string, context: string) => request<{ ok: boolean }>(`/tasks/${id}/context`, { method: "PUT", body: JSON.stringify({ context }) }),
   listModels: () => request<any[]>("/config/models"),
   createModel: (config: any) => request<any>("/config/models", { method: "POST", body: JSON.stringify(config) }),
   updateModel: (id: string, config: any) => request<any>(`/config/models/${id}`, { method: "PUT", body: JSON.stringify(config) }),
