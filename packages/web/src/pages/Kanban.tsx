@@ -43,7 +43,6 @@ export function Kanban() {
   }, [refresh]);
 
   const running = tasks.filter(t => t.status === "running");
-  const created = tasks.filter(t => t.status === "created");
   const completed = tasks.filter(t => t.status === "completed" || t.status === "stopped");
 
   if (loading) return <div className="p-6 text-text-secondary">Loading...</div>;
@@ -63,7 +62,7 @@ export function Kanban() {
       <div className="flex-1 overflow-auto p-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-          {/* ── Left Column: Tasks ── */}
+          {/* ── Left Column ── */}
           <div className="space-y-4">
 
             {/* Running Tasks */}
@@ -73,59 +72,6 @@ export function Kanban() {
               ) : running.map(task => (
                 <RunningTaskCard key={task.id} task={task} events={events} />
               ))}
-            </Section>
-
-            {/* Planned Tasks */}
-            <Section title="📋 Planned" count={created.length}>
-              {created.length === 0 ? (
-                <Empty text="No planned tasks" />
-              ) : created.map(task => (
-                <TaskCard key={task.id} task={task} />
-              ))}
-            </Section>
-
-            {/* Completed Tasks */}
-            <Section title="✅ Completed" count={completed.length}>
-              {completed.length === 0 ? (
-                <Empty text="No completed tasks" />
-              ) : completed.slice(0, 5).map(task => (
-                <TaskCard key={task.id} task={task} />
-              ))}
-            </Section>
-          </div>
-
-          {/* ── Right Column: Activity ── */}
-          <div className="space-y-4">
-
-            {/* Recent Activity */}
-            <Section title="⚡ Recent Activity" count={events.length}>
-              {events.length === 0 ? (
-                <Empty text="No activity yet" />
-              ) : (
-                <div className="space-y-1 max-h-96 overflow-auto">
-                  {events.slice(-15).reverse().map(event => (
-                    <ActivityItem key={event.id} event={event} />
-                  ))}
-                </div>
-              )}
-            </Section>
-
-            {/* Flags Found */}
-            <Section title="🚩 Flags Found" count={events.filter(e => e.type === "flag-found").length}>
-              {events.filter(e => e.type === "flag-found").length === 0 ? (
-                <Empty text="No flags found yet" />
-              ) : (
-                <div className="space-y-1">
-                  {events.filter(e => e.type === "flag-found").map(event => (
-                    <div key={event.id} className="flex items-center gap-2 px-3 py-1.5 bg-accent-green/5 rounded">
-                      <span className="text-accent-green text-sm">🏁</span>
-                      <span className="text-accent-green font-mono text-xs break-all select-all">
-                        {event.data?.flag}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </Section>
 
             {/* Loop Agent Status */}
@@ -181,6 +127,50 @@ export function Kanban() {
                 </div>
               </Section>
             )}
+
+            {/* Completed Tasks */}
+            <Section title="✅ Completed" count={completed.length}>
+              {completed.length === 0 ? (
+                <Empty text="No completed tasks" />
+              ) : completed.slice(0, 10).map(task => (
+                <TaskCard key={task.id} task={task} />
+              ))}
+            </Section>
+          </div>
+
+          {/* ── Right Column: Activity ── */}
+          <div className="space-y-4">
+
+            {/* Recent Activity */}
+            <Section title="⚡ Recent Activity" count={Math.min(events.length, 10)}>
+              {events.length === 0 ? (
+                <Empty text="No activity yet" />
+              ) : (
+                <div className="space-y-1">
+                  {events.slice(-10).reverse().map(event => (
+                    <ActivityItem key={event.id} event={event} />
+                  ))}
+                </div>
+              )}
+            </Section>
+
+            {/* Flags Found */}
+            <Section title="🚩 Flags Found" count={Math.min(events.filter(e => e.type === "flag-found").length, 10)}>
+              {events.filter(e => e.type === "flag-found").length === 0 ? (
+                <Empty text="No flags found yet" />
+              ) : (
+                <div className="space-y-1">
+                  {events.filter(e => e.type === "flag-found").slice(-10).reverse().map(event => (
+                    <div key={event.id} className="flex items-center gap-2 px-3 py-1.5 bg-accent-green/5 rounded">
+                      <span className="text-accent-green text-sm">🏁</span>
+                      <span className="text-accent-green font-mono text-xs break-all select-all">
+                        {event.data?.flag}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Section>
           </div>
         </div>
       </div>
