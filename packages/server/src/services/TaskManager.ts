@@ -352,13 +352,29 @@ export class TaskManager extends EventEmitter {
         typeof m.content === "string" && m.content.includes("ALL_CHALLENGES_SOLVED")
       );
 
+      // Extract total challenges mentioned by agent (e.g., "94 total challenges")
+      let totalChallenges = 0;
+      for (const m of result.messages) {
+        if (typeof m.content === "string") {
+          const match = m.content.match(/(\d+)\s*(?:total\s*)?challenges?/i);
+          if (match) { totalChallenges = parseInt(match[1]); break; }
+        }
+      }
+
       // Determine status:
-      // - Agent confirmed ALL_CHALLENGES_SOLVED + has flags → completed
+      // - Agent confirmed ALL_CHALLENGES_SOLVED + solved > 50% → completed
+      // - Agent confirmed but solved < 50% → stopped (likely premature)
       // - Has flags but no confirmation → stopped (partial, can retry)
       // - No flags → failed
       let status: string;
       if (agentConfirmedComplete && flagCount > 0) {
-        status = "completed";
+        // Verify the agent actually solved a reasonable portion
+        if (totalChallenges > 0 && flagCount < totalChallenges * 0.5) {
+          // Agent said done but solved less than half — likely premature
+          status = "stopped";
+        } else {
+          status = "completed";
+        }
       } else if (flagCount > 0) {
         status = "stopped";
       } else {
