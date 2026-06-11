@@ -3,6 +3,8 @@ import type { SubAgent } from "deepagents";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatOpenAI } from "@langchain/openai";
 import { v4 as uuid } from "uuid";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 type BaseChatModel = any; // from @langchain/core, not directly importable in pnpm
 import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createStreamEmitterMiddleware } from "../middleware/streamEmitter.js";
@@ -175,11 +177,9 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
 
   // Skills: use container path when Docker is available, host path otherwise
   // Container mounts skills at /skills/, host has them at projectRoot/skills/
-  const skillsRoot = containerManager ? "/skills" : (() => {
-    const { fileURLToPath } = require("node:url");
-    const { dirname, resolve } = require("node:path");
-    return resolve(dirname(fileURLToPath(import.meta.url)), "../../../../skills");
-  })();
+  const skillsRoot = containerManager
+    ? "/skills"
+    : resolve(dirname(fileURLToPath(import.meta.url)), "../../../../skills");
 
   const categorySkillMap: Record<string, string> = {
     web: skillsRoot + "/web-security/",

@@ -28,8 +28,8 @@ export function createLoopRoutes(loopAgent: LoopAgent): Router {
   // Trigger manual run
   router.post("/run", async (_req, res) => {
     try {
-      // Run async, return immediately
-      loopAgent.run();
+      // Run async, return immediately — catch errors to prevent unhandled rejections
+      loopAgent.run().catch(err => console.error("[LoopAgent] Run error:", err.message));
       res.json({ ok: true, message: "Loop analysis started" });
     } catch (err: any) {
       res.status(400).json({ error: err.message });

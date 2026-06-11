@@ -177,12 +177,19 @@ export class TaskManager extends EventEmitter {
    * Stop a task permanently.
    */
   async stop(taskId: string): Promise<void> {
+    const task = await this.getTask(taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+
+    // Only stop tasks that are in a stoppable state
+    if (task.status !== "running" && task.status !== "paused") {
+      return; // Already stopped/completed/failed, nothing to do
+    }
+
     const controller = this.abortControllers.get(taskId);
     controller?.abort();
     this.abortControllers.delete(taskId);
 
-    const task = await this.getTask(taskId);
-    const elapsedMs = task?.startedAt
+    const elapsedMs = task.startedAt
       ? Date.now() - task.startedAt.getTime()
       : 0;
 
@@ -398,7 +405,7 @@ export class TaskManager extends EventEmitter {
     await db
       .update(tasks)
       .set({
-        status: "stopped",
+        status: "error",
         error: err.message,
         completedAt: new Date(),
         updatedAt: new Date(),

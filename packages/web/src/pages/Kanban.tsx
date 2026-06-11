@@ -148,10 +148,10 @@ function Empty({ text }: { text: string }) {
 }
 
 function RunningTaskCard({ task, events }: { task: TaskStats; events: any[] }) {
-  const taskEvents = events.filter(e => e.taskId === task.id || true); // SSE events don't have taskId
-  const toolCalls = taskEvents.filter(e => e.type === "tool-call").length;
-  const flags = taskEvents.filter(e => e.type === "flag-found").length;
-  const lastEvent = taskEvents[taskEvents.length - 1];
+  // SSE events from the store are for the currently viewed task only
+  const toolCalls = events.filter(e => e.type === "tool-call").length;
+  const flags = events.filter(e => e.type === "flag-found").length;
+  const lastEvent = events[events.length - 1];
   const elapsed = task.startedAt
     ? Math.round((Date.now() - new Date(task.startedAt).getTime()) / 1000)
     : 0;

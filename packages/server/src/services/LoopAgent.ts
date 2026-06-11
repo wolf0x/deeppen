@@ -192,47 +192,46 @@ export class LoopAgent {
   }
 
   private async loadConfig(): Promise<void> {
-    const rows = await db.select().from(settings).where(
-      eq(settings.key, "loop_enabled")
-    );
-    const configMap = new Map<string, any>();
-    for (const row of rows) {
-      try {
-        configMap.set(row.key, JSON.parse(row.value));
-      } catch {
-        configMap.set(row.key, row.value);
-      }
-    }
-    // Load all loop settings
     const allSettings = await db.select().from(settings);
+    const knownKeys = new Set(Object.keys(this.config));
     for (const row of allSettings) {
       if (row.key.startsWith("loop_")) {
         const key = row.key.replace("loop_", "");
-        try {
-          (this.config as any)[key] = JSON.parse(row.value);
-        } catch {
-          (this.config as any)[key] = row.value;
+        if (knownKeys.has(key)) {
+          try {
+            (this.config as any)[key] = JSON.parse(row.value);
+          } catch {
+            (this.config as any)[key] = row.value;
+          }
         }
       }
     }
   }
 
   private async findStaleTasks(): Promise<any[]> {
-    const threshold = Date.now() - this.config.staleThresholdMinutes * 60 * 1000;
     const allTasks = await db.select().from(tasks);
-    return allTasks.filter((t: any) => {
-      if (t.status !== "running") return false;
-      // Check if last event is older than threshold
-      return true; // Will be filtered by event analysis
-    });
+    const staleTasks: any[] = [];
+    for (const task of allTasks) {
+      if (task.status !== "running") continue;
+      // Check last event time
+      const lastEvent = await db.select().from(streamEvents)
+        .where(eq(streamEvents.taskId, task.id))
+        .orderBy(streamEvents.timestamp)
+        .limit(1);
+      if (lastEvent.length > 0) {
+        const minutesSince = (Date.now() - lastEvent[0].timestamp) / 60000;
+        if (minutesSince >= this.config.staleThresholdMinutes) {
+          staleTasks.push(task);
+        }
+      }
+    }
+    return staleTasks;
   }
 
   private async findFailedTasks(): Promise<any[]> {
-    return db.select().from(tasks).where(
-      and(
-        eq(tasks.status, "stopped"),
-        // Only tasks with some flags (partial progress)
-      )
+    const allTasks = await db.select().from(tasks);
+    return allTasks.filter((t: any) =>
+      t.status === "stopped" || t.status === "error"
     );
   }
 
@@ -326,6 +325,15 @@ export class LoopAgent {
   private async executeDecision(analysis: TaskAnalysis): Promise<void> {
     const { taskId, recommendation, optimizedContext } = analysis;
 
+    // For stale running tasks, stop them first before retry
+    if (analysis.status === "running" && (recommendation === "retry" || recommendation === "optimize")) {
+      try {
+        await this.taskManager.stop(taskId);
+      } catch {
+        // Already stopped
+      }
+    }
+
     switch (recommendation) {
       case "retry":
         console.log(`[LoopAgent] Retrying task ${taskId}: ${analysis.reason}`);
@@ -339,10 +347,8 @@ export class LoopAgent {
       case "optimize":
         console.log(`[LoopAgent] Optimizing task ${taskId}: ${analysis.reason}`);
         if (optimizedContext) {
-          // Inject optimized context
           await this.taskManager.updateUserContext(taskId, optimizedContext);
         }
-        // Then retry
         try {
           await this.taskManager.retry(taskId);
         } catch (err: any) {
