@@ -26,7 +26,7 @@ const DEFAULTS: Settings = {
 
 const LOOP_DEFAULTS: LoopConfig = {
   enabled: false,
-  intervalMinutes: 10,
+  intervalMinutes: 5,
   maxRetries: 3,
   staleThresholdMinutes: 10,
   autoOptimize: true,

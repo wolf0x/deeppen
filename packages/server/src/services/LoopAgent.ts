@@ -70,7 +70,7 @@ Respond with a JSON array of decisions:
 export class LoopAgent {
   private config: LoopConfig = {
     enabled: false,
-    intervalMinutes: 10,
+    intervalMinutes: 5,
     maxRetries: 3,
     staleThresholdMinutes: 10,
     autoOptimize: true,
