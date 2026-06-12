@@ -366,6 +366,15 @@ export class TaskManager extends EventEmitter {
       const finalFlags = finalTask?.flag ? finalTask.flag.split(",").filter(Boolean) : [];
       const flagCount = finalFlags.length;
 
+      // Check if agent hit time/iteration limits
+      const hitLimit = result.messages.some((m: any) =>
+        typeof m.content === "string" && (
+          m.content.includes("TIME LIMIT REACHED") ||
+          m.content.includes("RABBIT HOLE ALERT") ||
+          m.content.includes("ESCALATION:")
+        )
+      );
+
       // Check if agent explicitly confirmed all challenges solved
       const agentConfirmedComplete = result.messages.some((m: any) =>
         typeof m.content === "string" && m.content.includes("ALL_CHALLENGES_SOLVED")
@@ -381,21 +390,21 @@ export class TaskManager extends EventEmitter {
       }
 
       // Determine status:
-      // - Agent confirmed ALL_CHALLENGES_SOLVED + solved > 50% → completed
-      // - Agent confirmed but solved < 50% → stopped (likely premature)
-      // - Has flags but no confirmation → stopped (partial, can retry)
+      // - Has flags + agent confirmed ALL_CHALLENGES_SOLVED → completed
+      // - Has flags + agent finished naturally (no timeout) → completed
+      // - Has flags + hit time/iteration limit → stopped (partial, can retry)
       // - No flags → failed
       let status: string;
-      if (agentConfirmedComplete && flagCount > 0) {
-        // Verify the agent actually solved a reasonable portion
-        if (totalChallenges > 0 && flagCount < totalChallenges * 0.5) {
-          // Agent said done but solved less than half — likely premature
+      if (flagCount > 0) {
+        if (agentConfirmedComplete) {
+          status = "completed";
+        } else if (hitLimit) {
+          // Hit time/iteration limit — partial progress
           status = "stopped";
         } else {
+          // Agent found flags and finished naturally
           status = "completed";
         }
-      } else if (flagCount > 0) {
-        status = "stopped";
       } else {
         status = "failed";
       }
