@@ -114,6 +114,21 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    version: 7,
+    name: "add_seq_to_tasks",
+    up: (db) => {
+      const columns = db.prepare("PRAGMA table_info(tasks)").all() as any[];
+      const hasColumn = columns.some((c: any) => c.name === "seq");
+      if (!hasColumn) {
+        db.exec("ALTER TABLE tasks ADD COLUMN seq INTEGER NOT NULL DEFAULT 0");
+        // Backfill existing tasks with sequence numbers
+        const rows = db.prepare("SELECT id FROM tasks ORDER BY created_at").all() as any[];
+        const update = db.prepare("UPDATE tasks SET seq = ? WHERE id = ?");
+        rows.forEach((row: any, i: number) => update.run(i + 1, row.id));
+      }
+    },
+  },
 ];
 
 export function runMigrations(dbPath: string): void {

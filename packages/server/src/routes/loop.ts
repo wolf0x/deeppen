@@ -4,11 +4,12 @@ import type { LoopAgent } from "../services/LoopAgent.js";
 export function createLoopRoutes(loopAgent: LoopAgent): Router {
   const router = Router();
 
-  // Get loop config
+  // Get loop status and config
   router.get("/status", async (_req, res) => {
     try {
       const config = await loopAgent.getConfig();
-      res.json({ config });
+      const status = loopAgent.getStatus();
+      res.json({ config, ...status });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

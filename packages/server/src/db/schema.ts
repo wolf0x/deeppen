@@ -30,6 +30,7 @@ export const subagentConfigs = sqliteTable("subagent_configs", {
 
 export const tasks = sqliteTable("tasks", {
   id: text("id").primaryKey(),
+  seq: integer("seq").notNull().default(0),
   name: text("name").notNull(),
   status: text("status").notNull().default("idle"),
   category: text("category").notNull(),

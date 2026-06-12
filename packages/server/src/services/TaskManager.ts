@@ -26,8 +26,14 @@ export class TaskManager extends EventEmitter {
     const id = uuid();
     const now = new Date();
 
+    // Get next sequence number
+    const allTasks = await db.select().from(tasks);
+    const maxSeq = allTasks.reduce((max, t) => Math.max(max, t.seq ?? 0), 0);
+    const nextSeq = maxSeq + 1;
+
     await db.insert(tasks).values({
       id,
+      seq: nextSeq,
       name: config.name,
       status: "created",
       category: config.challenge.category,

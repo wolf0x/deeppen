@@ -78,6 +78,7 @@ export class LoopAgent {
   };
   private timer: ReturnType<typeof setInterval> | null = null;
   private isRunning = false;
+  private runHistory: Array<{ time: Date; analyzed: number; actions: Record<string, number> }> = [];
 
   constructor(
     private configStore: ConfigStore,
@@ -108,6 +109,14 @@ export class LoopAgent {
     return { ...this.config };
   }
 
+  getStatus(): { running: boolean; lastRun: Date | null; history: Array<{ time: Date; analyzed: number; actions: Record<string, number> }> } {
+    return {
+      running: this.isRunning,
+      lastRun: this.runHistory.length > 0 ? this.runHistory[this.runHistory.length - 1].time : null,
+      history: this.runHistory.slice(-10),
+    };
+  }
+
   async updateConfig(update: Partial<LoopConfig>): Promise<LoopConfig> {
     Object.assign(this.config, update);
     for (const [key, value] of Object.entries(update)) {
@@ -133,17 +142,31 @@ export class LoopAgent {
       const activeTasks = await this.findActiveTasks();
       if (activeTasks.length === 0) {
         console.log("[LoopAgent] No active tasks");
+        this.recordRun(0, {});
         return;
       }
 
+      console.log(`[LoopAgent] Analyzing ${activeTasks.length} tasks`);
+
       // Step 2: Process each task
+      const actions: Record<string, number> = { none: 0, guide: 0, redirect: 0, stop: 0 };
       for (const task of activeTasks) {
-        await this.processTask(task);
+        const action = await this.processTask(task);
+        if (action) actions[action] = (actions[action] || 0) + 1;
       }
+
+      this.recordRun(activeTasks.length, actions);
     } catch (err: any) {
       console.error("[LoopAgent] Error:", err.message);
     } finally {
       this.isRunning = false;
+    }
+  }
+
+  private recordRun(analyzed: number, actions: Record<string, number>): void {
+    this.runHistory.push({ time: new Date(), analyzed, actions });
+    if (this.runHistory.length > 20) {
+      this.runHistory = this.runHistory.slice(-20);
     }
   }
 
@@ -154,12 +177,12 @@ export class LoopAgent {
     );
   }
 
-  private async processTask(task: any): Promise<void> {
+  private async processTask(task: any): Promise<string | null> {
     const taskId = task.id;
 
     // Step 1: Read current state
     const state = await this.readTaskState(task);
-    if (!state) return;
+    if (!state) return null;
 
     // Step 2: Get or create loop session
     let session = await this.getLoopSession(taskId);
@@ -172,12 +195,12 @@ export class LoopAgent {
     if (convergence === "completed") {
       console.log(`[LoopAgent] Task ${taskId} converged — goal achieved`);
       await this.updateSessionStatus(session.id, "completed");
-      return;
+      return null;
     }
     if (convergence === "stalled") {
       console.log(`[LoopAgent] Task ${taskId} stalled — no progress after ${this.config.convergenceThreshold} iterations`);
       await this.updateSessionStatus(session.id, "stopped");
-      return;
+      return null;
     }
 
     // Step 4: Get previous iteration result
@@ -188,6 +211,8 @@ export class LoopAgent {
 
     // Step 6: Execute decision
     await this.executeDecision(session, state, decision);
+
+    return decision.action;
   }
 
   private async readTaskState(task: any): Promise<TaskState | null> {
