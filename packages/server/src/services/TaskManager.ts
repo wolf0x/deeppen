@@ -231,7 +231,11 @@ export class TaskManager extends EventEmitter {
    * List all tasks.
    */
   async listTasks(): Promise<any[]> {
-    return db.select().from(tasks).orderBy(desc(tasks.createdAt));
+    const rows = await db.select().from(tasks).orderBy(desc(tasks.createdAt));
+    return rows.map((t: any) => ({
+      ...t,
+      name: t.seq ? `T${String(t.seq).padStart(5, "0")} - ${t.name}` : t.name,
+    }));
   }
 
   /**
