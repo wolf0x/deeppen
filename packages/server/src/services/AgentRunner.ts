@@ -104,31 +104,37 @@ export interface RunAgentOptions {
 
 const CTF_SYSTEM_PROMPT = `You are DeepPen, an autonomous CTF challenge solver.
 
-## CRITICAL: Follow Skills Step by Step
-You have access to CTF skills loaded from /skills/. Each skill contains a SKILL.md with proven methodology.
-1. FIRST: Read the relevant SKILL.md file using read_file
-2. THEN: Follow the methodology step by step — do NOT skip steps
-3. The skill tells you exactly what to test and how — trust it
-
-## Phase 1: Analyze + Read Skill
+## Phase 1: Analyze
 1. Analyze the challenge to determine type (web/pwn/crypto/etc.)
-2. Read the matching SKILL.md (e.g., /skills/ctf-web/SKILL.md)
-3. The skill will tell you the methodology — follow it
+2. Start solving directly — use your knowledge first
+3. If stuck or unsure, read a skill for guidance (see below)
 
-## Phase 2: Execute (Follow Skill Methodology)
-- Follow the skill's steps IN ORDER
-- If the skill says "test for SQL injection on login forms" → do it
-- If the skill says "check /ftp directory" → do it
-- If the skill says "try XSS on search parameter" → do it
-- Do NOT skip steps or improvise — the skill is proven to work
+## Phase 2: Execute
+- Use tools to investigate and exploit
+- Work systematically through the challenge
+- If stuck, read a relevant SKILL.md for methodology
 
 ## Phase 3: Extract Flag
 - Output flag clearly as flag{...} or CTF{...} or HTB{...}
 
+## Available Skills (read on demand, NOT pre-loaded)
+Skills are at /skills/ — read them with read_file when you need domain knowledge:
+- /skills/ctf-web/SKILL.md — web exploitation (SQLi, XSS, SSRF, etc.)
+- /skills/ctf-pwn/SKILL.md — binary exploitation
+- /skills/ctf-crypto/SKILL.md — cryptography
+- /skills/ctf-forensics/SKILL.md — forensics
+- /skills/ctf-misc/SKILL.md — miscellaneous
+- /skills/ctf-writeup/SKILL.md — writeup generation
+
+When to read a skill:
+- You're unsure how to approach a challenge type
+- You've tried basic approaches and they didn't work
+- You need a specific technique (e.g., SQL injection methodology)
+
 ## Tools
 - execute: Run shell commands (curl, nmap, sqlmap, python, etc.)
 - web_fetch: Fetch a URL
-- read_file: Read SKILL.md files
+- read_file: Read SKILL.md files when needed
 - ls, grep, glob: Search files
 
 ## CRITICAL: Do NOT Delegate
@@ -177,23 +183,9 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
   // Custom tools — DeepAgents provides execute, ls, read_file, etc. natively
   const tools = [createWebFetchTool()];
 
-  // Skills: use container path when Docker is available, host path otherwise
-  // Container mounts skills at /skills/, host has them at projectRoot/skills/
-  const skillsRoot = containerManager
-    ? "/skills"
-    : resolve(dirname(fileURLToPath(import.meta.url)), "../../../../skills");
-
-  // Map challenge categories to ctf-* skills
-  const categorySkillMap: Record<string, string[]> = {
-    web: [skillsRoot + "/ctf-web/", skillsRoot + "/ctf-writeup/"],
-    pwn: [skillsRoot + "/ctf-pwn/", skillsRoot + "/ctf-writeup/"],
-    crypto: [skillsRoot + "/ctf-crypto/", skillsRoot + "/ctf-writeup/"],
-    forensics: [skillsRoot + "/ctf-forensics/", skillsRoot + "/ctf-writeup/"],
-    misc: [skillsRoot + "/ctf-misc/", skillsRoot + "/ctf-writeup/"],
-    "prompt-injection": [skillsRoot + "/ctf-ai-ml/", skillsRoot + "/ctf-writeup/"],
-  };
-  const effectiveSkills = skills?.length ? skills : (categorySkillMap[category] ?? [skillsRoot + "/ctf-misc/", skillsRoot + "/ctf-writeup/"]);
-  console.log("[AgentRunner] Skills:", effectiveSkills.join(", "));
+  // Skills are NOT pre-loaded — agent reads them on demand via read_file
+  // This saves context window and lets the agent decide when skills are needed
+  const skillsRoot = containerManager ? "/skills" : resolve(dirname(fileURLToPath(import.meta.url)), "../../../../skills");
 
   // Timeout wrapper for task tool — prevents subagent hangs
   const taskTimeoutMiddleware = createMiddleware({
@@ -219,13 +211,12 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     },
   });
 
-  console.log("[AgentRunner] Creating DeepAgent with", tools.length, "custom tools, skills:", effectiveSkills);
+  console.log("[AgentRunner] Creating DeepAgent with", tools.length, "custom tools");
   const agent = createDeepAgent({
     model,
     systemPrompt: CTF_SYSTEM_PROMPT,
     tools,
     backend,
-    skills: effectiveSkills,
     subagents: options.subagents ?? [],
     generalPurposeAgent: false,
     middleware: [

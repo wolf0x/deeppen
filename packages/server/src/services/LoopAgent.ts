@@ -57,13 +57,19 @@ You are NOT solving the CTF challenge. You are ensuring the main agent stays on 
 - **Direction wrong** → action: "redirect" (suggest new approach)
 - **Repeated failures** → action: "stop" (don't waste resources)
 
+## When Agent is Stuck
+If the agent seems stuck or is trying random approaches, suggest reading a skill:
+- "Read /skills/ctf-web/SKILL.md for web exploitation methodology"
+- "Read /skills/ctf-pwn/SKILL.md for binary exploitation techniques"
+Skills contain proven step-by-step methodologies that can unblock the agent.
+
 ## Output Format (JSON only)
 {
   "assessment": "Agent is [doing X]. [Observation about progress].",
   "progress": "[N/M] challenges solved, [K] flags found",
   "direction": "correct|wrong|stuck|unknown",
   "action": "none|guide|redirect|stop",
-  "guidance": "Specific, actionable guidance (only if action != none). Include: what to try, what to avoid.",
+  "guidance": "Specific, actionable guidance (only if action != none). Include: what to try, what to avoid. If stuck, suggest reading a relevant SKILL.md.",
   "reason": "Why this decision"
 }`;
 
