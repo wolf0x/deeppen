@@ -136,3 +136,33 @@ export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
 });
+
+export const loopSessions = sqliteTable("loop_sessions", {
+  id: text("id").primaryKey(),
+  taskId: text("task_id").notNull(),
+  goal: text("goal").notNull(),
+  status: text("status").notNull().default("active"), // active, completed, stopped
+  currentStrategy: text("current_strategy"),
+  convergenceScore: integer("convergence_score").default(0),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export const loopIterations = sqliteTable("loop_iterations", {
+  id: text("id").primaryKey(),
+  sessionId: text("session_id").notNull(),
+  iterationNum: integer("iteration_num").notNull(),
+  stateJson: text("state_json"), // snapshot of current state
+  decision: text("decision"), // LLM decision
+  action: text("action"), // action taken
+  guidance: text("guidance"), // guidance injected
+  result: text("result"), // result of action (filled in next iteration)
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+});
+
+export const guidanceStore = sqliteTable("guidance_store", {
+  taskId: text("task_id").primaryKey(),
+  guidance: text("guidance").notNull(),
+  iterationNum: integer("iteration_num").default(0),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});

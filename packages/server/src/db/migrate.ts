@@ -75,6 +75,45 @@ const migrations: Migration[] = [
       db.exec("CREATE INDEX IF NOT EXISTS idx_stream_events_task_id ON stream_events(task_id)");
     },
   },
+  {
+    version: 6,
+    name: "create_loop_tables",
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS loop_sessions (
+          id TEXT PRIMARY KEY,
+          task_id TEXT NOT NULL,
+          goal TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active',
+          current_strategy TEXT,
+          convergence_score INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )
+      `);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS loop_iterations (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          iteration_num INTEGER NOT NULL,
+          state_json TEXT,
+          decision TEXT,
+          action TEXT,
+          guidance TEXT,
+          result TEXT,
+          created_at INTEGER NOT NULL
+        )
+      `);
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS guidance_store (
+          task_id TEXT PRIMARY KEY,
+          guidance TEXT NOT NULL,
+          iteration_num INTEGER DEFAULT 0,
+          updated_at INTEGER NOT NULL
+        )
+      `);
+    },
+  },
 ];
 
 export function runMigrations(dbPath: string): void {

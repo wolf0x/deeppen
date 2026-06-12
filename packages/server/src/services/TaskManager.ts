@@ -7,11 +7,17 @@ import type { TaskConfig, TaskStatus, StreamEvent } from "@deeppen/shared";
 import { runCTFAgent } from "./AgentRunner.js";
 import { ConfigStore } from "./ConfigStore.js";
 import { ContainerManager } from "./ContainerManager.js";
+import type { GuidanceStore } from "./GuidanceStore.js";
 
 export class TaskManager extends EventEmitter {
   private abortControllers = new Map<string, AbortController>();
   private configStore = new ConfigStore();
   private containerManager = new ContainerManager();
+  private guidanceStore: GuidanceStore | null = null;
+
+  setGuidanceStore(store: GuidanceStore): void {
+    this.guidanceStore = store;
+  }
 
   /**
    * Create a new task from config.
@@ -334,6 +340,8 @@ export class TaskManager extends EventEmitter {
         attachments,
         containerManager: useContainer ? this.containerManager : undefined,
         userContext: task.userContext ?? undefined,
+        taskId,
+        guidanceStore: this.guidanceStore ?? undefined,
         rabbitHole,
         abortSignal: signal,
         onStreamEvent: (event) => this.emitStreamEvent(taskId, event),

@@ -18,6 +18,7 @@ import { createWriteupRoutes } from "./routes/writeups.js";
 import { ChatService } from "./services/ChatService.js";
 import { createChatRoutes } from "./routes/chat.js";
 import { createSettingsRoutes } from "./routes/settings.js";
+import { GuidanceStore } from "./services/GuidanceStore.js";
 import { LoopAgent } from "./services/LoopAgent.js";
 import { createLoopRoutes } from "./routes/loop.js";
 
@@ -35,7 +36,11 @@ const apiConnector = new APIConnector();
 const containerManager = new ContainerManager();
 const writeupGenerator = new WriteupGenerator();
 const chatService = new ChatService(configStore, taskManager);
-const loopAgent = new LoopAgent(configStore, taskManager);
+const guidanceStore = new GuidanceStore();
+const loopAgent = new LoopAgent(configStore, taskManager, guidanceStore);
+
+// Wire GuidanceStore into TaskManager
+taskManager.setGuidanceStore(guidanceStore);
 
 // Start Loop Agent
 loopAgent.start();
@@ -64,4 +69,4 @@ app.listen(PORT, () => {
   console.log(`DeepPen server running on port ${PORT}`);
 });
 
-export { app, taskManager, configStore, streamBridge, mcpManager, apiConnector, containerManager, writeupGenerator, chatService };
+export { app, taskManager, configStore, streamBridge, mcpManager, apiConnector, containerManager, writeupGenerator, chatService, guidanceStore };

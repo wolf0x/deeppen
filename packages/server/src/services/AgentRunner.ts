@@ -10,6 +10,7 @@ import type { ModelConfig, StreamEvent } from "@deeppen/shared";
 import { createStreamEmitterMiddleware } from "../middleware/streamEmitter.js";
 import { createProgressTrackerMiddleware } from "../middleware/ctfProgressTracker.js";
 import { createRabbitHoleEscapeMiddleware } from "../middleware/ctfRabbitHoleEscape.js";
+import { createGuidanceInjectorMiddleware } from "../middleware/guidanceInjector.js";
 import { createMiddleware, ToolMessage } from "langchain";
 import { DockerBackend } from "../backends/docker.js";
 import { LocalBackend } from "../backends/local.js";
@@ -89,6 +90,8 @@ export interface RunAgentOptions {
   subagents?: SubAgent[];
   containerManager?: ContainerManager;
   userContext?: string;
+  taskId?: string;
+  guidanceStore?: any;
   rabbitHole?: {
     maxIterations: number;
     maxTimeMinutes: number;
@@ -234,6 +237,10 @@ export async function runCTFAgent(options: RunAgentOptions): Promise<{
     subagents: options.subagents ?? [],
     generalPurposeAgent: false,
     middleware: [
+      // Guidance injection from Loop Agent
+      ...(options.taskId && options.guidanceStore
+        ? [createGuidanceInjectorMiddleware(options.taskId, options.guidanceStore)]
+        : []),
       // Subagent timeout — prevents 12min+ hangs
       taskTimeoutMiddleware,
       // Stream events — the ONLY source of tool/model activity events
