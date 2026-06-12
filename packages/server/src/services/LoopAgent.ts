@@ -343,6 +343,13 @@ ${session.goal}
 - Minutes since last activity: ${state.minutesSinceLastEvent}
 - Looping: ${state.isLooping ? "YES" : "no"}
 
+## Expected Methodology
+The agent should follow the CTF skill methodology:
+1. Reconnaissance: Map the application, identify inputs, check robots.txt/sitemap
+2. Analysis: Test for SQL injection, XSS, SSRF, auth bypass, IDOR
+3. Exploitation: Use discovered vulnerabilities
+4. Flag Extraction: Search for flag patterns
+
 ## Recent Tool Calls
 ${state.recentToolCalls.map(t => "- " + t).join("\n")}
 
